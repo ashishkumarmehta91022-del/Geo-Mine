@@ -40,6 +40,7 @@ def _to_response(document: Document) -> DocumentResponse:
         status=document.status,
         storage_reference=document.storage_reference,
         uploaded_at=document.uploaded_at,
+        error_message=document.error_message,
     )
 
 

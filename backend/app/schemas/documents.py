@@ -13,6 +13,8 @@ class DocumentResponse(BaseModel):
     status: str
     storage_reference: str
     uploaded_at: datetime
+    # Preserved processing error (null unless status == "failed").
+    error_message: str | None = None
 
 
 class DocumentListResponse(BaseModel):

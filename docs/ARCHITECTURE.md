@@ -47,6 +47,37 @@ abstraction — storage paths never leave the backend.
 **Step 3 stores and registers documents only — OCR/content extraction is NOT
 part of this step.**
 
+## 1c. Document processing pipeline (Step 4)
+
+```markdown
+   Uploaded Document (from Step 3 storage)
+         ↓
+   Document Type Detection (extension/type via registry)
+         ↓
+   Processing Job (POST /api/documents/{id}/process — synchronous prototype,
+                   service shaped so async workers can replace the route later)
+         ↓
+   Content Extraction (DocumentExtractor.extract: PDF/DOCX/XLSX/XLS/Image)
+         ↓
+   Page/Sheet/Section Normalization (light, traceability-preserving)
+         ↓
+   document_pages rows (one per unit: page | sheet | image) + extractor
+   provenance (name, version, extracted_at) + typed structured_metadata
+         ↓
+   Processing Status (documents.status: uploaded → processing → processed | failed)
+         ↓
+   Future AI/RAG layer (never inside the extraction layer)
+```
+
+Guarantees: honest text statuses (`extracted` / `no_text` / `ocr_required` /
+`failed` — scanned PDFs are never faked); source traceability (PDF → page,
+DOCX → section/table, sheets → row/cell, image → image); idempotent
+re-processing (rows replaced in one transaction with the `processed`
+transition); failures committed with the real error message, never swallowed.
+
+**Step 4 creates the deterministic extraction foundation only — no OCR, no AI,
+no report generation.**
+
 ## 2. Backend layering
 
 ```
@@ -62,7 +93,10 @@ app/
 │                  #   extracted_records, validation_results, audit_logs
 ├── alembic/       # schema migrations — the source of truth for the DB schema
 ├── services/      # document_service (upload/list/detail/delete),
-│                  #   document_storage (DocumentStorage interface + LocalFileStorage)
+│                  #   document_storage (DocumentStorage interface + LocalFileStorage),
+│                  #   processing_service (transactional extraction pipeline)
+├── processing/    # extractor base + registry + normalization (no AI/OCR ever)
+│   └── extractors/   # pymupdf | python-docx | openpyxl | xlrd | pillow
 └── utils/         # file_validation (allowlist, MIME policy, signatures)
 ```
 

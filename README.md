@@ -205,6 +205,52 @@ swappable for S3/Azure/MinIO later without touching routes or services.
 - Path-traversal, null-byte and absolute-path filenames are sanitized;
   stored names are always server-generated.
 
+## Document Processing Pipeline (Step 4)
+
+**Step 4 does NOT perform OCR, does NOT use AI, and does NOT generate reports.**
+It builds the deterministic extraction foundation those future layers consume.
+
+```
+Upload → Validation → Storage → Processing → Extractor Selection
+      → Text/Table/Metadata Extraction → Normalization → Traceable Extraction Result
+      → (future: AI/RAG layer)
+```
+
+**Trigger:** `POST /api/documents/{id}/process` (synchronous prototype — the
+service is async-ready by design). Lifecycle: `uploaded → processing → processed`
+or `processing → failed` with the real error preserved in `error_message`.
+Re-processing replaces previous page rows — never duplicates.
+
+**Extractors (registered in a registry — no if/elif pipelines):**
+
+| Type            | Library (version recorded per extraction) |
+| --------------- | ----------------------------------------- |
+| PDF (`.pdf`)    | PyMuPDF — page-by-page text + page metadata |
+| DOCX (`.docx`)  | python-docx — paragraphs + tables in reading order |
+| XLSX (`.xlsx`)  | openpyxl — sheets, typed cells (int/float/str/date/bool/null), formulas never evaluated |
+| XLS (`.xls`)    | xlrd — same contract as XLSX |
+| Images          | Pillow — metadata only; text marked `ocr_required` |
+
+**Honest text status per page/sheet/image:** `extracted` · `no_text` (scanned
+PDF — future OCR) · `ocr_required` (images) · `failed`. Scanned PDFs are never
+pretended to have text.
+
+**New endpoints:**
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| POST | `/api/documents/{id}/process` | Run extraction (409 if already processing) |
+| GET | `/api/documents/{id}/processing-status` | Status, extractor info, statistics, errors |
+| GET | `/api/documents/{id}/content` | Normalized content: pages/sheets/image metadata with source references |
+
+Normalization is deliberately light (line endings, null chars, space runs,
+blank lines) — source content stays traceable: PDF → page, DOCX → section/table,
+XLSX/XLS → sheet → row/cell, image → image.
+
+**Security:** uploaded files are treated as untrusted — no formula evaluation,
+no macro/script execution, no archive extraction to disk; libraries are used
+in safe read-only modes.
+
 ## Current Implementation Status
 
 **Done (Step 1 — Foundation):**
@@ -213,6 +259,7 @@ swappable for S3/Azure/MinIO later without touching routes or services.
 - ✅ FastAPI backend with modular structure, `GET /api/health`, CORS, central error handling
 - ✅ PostgreSQL foundation: SQLAlchemy engine + sessions, ORM models for the 5 foundation tables, Alembic migration `0001_initial_schema`, DEMO seed script
 - ✅ Document ingestion: upload API with defense-in-depth validation (allowlist, MIME policy, magic bytes/OOXML checks, streaming size limit), swappable storage layer (local FS for dev), list/detail/download/delete APIs, functional Documents page UI
+- ✅ Deterministic processing pipeline: extractor registry (PyMuPDF / python-docx / openpyxl / xlrd / Pillow), typed extraction with provenance + source references, transactional persistence with idempotent re-processing, processing/status/content APIs, Documents page process button + extracted-content viewer
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -222,8 +269,7 @@ swappable for S3/Azure/MinIO later without touching routes or services.
 **Not yet implemented (later steps):**
 
 - ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
-- ⬜ OCR for scanned reports
-- ⬜ Data extraction and structuring
+- ⬜ OCR for scanned reports and images (`no_text`/`ocr_required` items are already flagged and queued for it)
 - ⬜ Validation engine
 - ⬜ Knowledge base (vector store — the base relational schema already exists)
 - ⬜ RAG pipeline

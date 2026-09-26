@@ -67,3 +67,32 @@ def migrated_engine(pg_url: str):
     yield app_engine
 
     app_engine.dispose()
+
+
+@pytest.fixture()
+def client(migrated_engine, monkeypatch, tmp_path):
+    """TestClient with isolated temp storage; truncates all tables per test."""
+    from fastapi.testclient import TestClient
+    from sqlalchemy import text
+
+    import app.api.routes.documents as documents_route
+    import app.api.routes.processing as processing_route
+    from app.config import settings
+    from app.main import app
+    from app.services.document_storage import LocalFileStorage
+
+    monkeypatch.setattr(settings, "document_storage_path", str(tmp_path / "documents"))
+    monkeypatch.setattr(documents_route, "_storage", LocalFileStorage(str(tmp_path / "documents")))
+    monkeypatch.setattr(processing_route, "_storage", LocalFileStorage(str(tmp_path / "documents")))
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    with migrated_engine.connect() as conn:
+        conn.execute(
+            text(
+                "TRUNCATE documents, document_pages, extracted_records, "
+                "validation_results, audit_logs RESTART IDENTITY CASCADE"
+            )
+        )
+        conn.commit()

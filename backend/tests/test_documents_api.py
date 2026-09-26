@@ -7,10 +7,6 @@ the FastAPI TestClient, with an isolated temp storage directory per run.
 import io
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import text
-
-from tests.conftest import BACKEND_DIR
 
 pytestmark = pytest.mark.db
 
@@ -19,24 +15,6 @@ VALID_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 256
 VALID_DOCX = b"PK\x03\x04" + b"[Content_Types].xml...word/document.xml" + b"\x00" * 256
 VALID_XLSX = b"PK\x03\x04" + b"[Content_Types].xml...xl/workbook.xml" + b"\x00" * 256
 NOT_A_PDF = b"this is definitely not a pdf"
-
-
-@pytest.fixture()
-def client(migrated_engine, monkeypatch, tmp_path):
-    """TestClient with isolated temp storage; cleans documents table per test."""
-    from app.config import settings
-    from app.main import app
-
-    monkeypatch.setattr(settings, "document_storage_path", str(tmp_path / "documents"))
-    import app.api.routes.documents as documents_route
-    monkeypatch.setattr(documents_route, "_storage", documents_route.LocalFileStorage(str(tmp_path / "documents")))
-
-    with TestClient(app) as test_client:
-        yield test_client
-
-    with migrated_engine.connect() as conn:
-        conn.execute(text("TRUNCATE documents, document_pages, extracted_records, validation_results, audit_logs RESTART IDENTITY CASCADE"))
-        conn.commit()
 
 
 def _upload(client, name: str, content: bytes, mime: str | None = None):

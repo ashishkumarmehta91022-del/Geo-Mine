@@ -1,6 +1,11 @@
 import { apiBaseUrl } from "@/lib/env";
 import { ApiError } from "@/lib/api";
-import type { DocumentListResponse, DocumentRecord } from "@/types/document";
+import type {
+  DocumentContent,
+  DocumentListResponse,
+  DocumentRecord,
+  ProcessingStatus,
+} from "@/types/document";
 
 /**
  * Document operations client. All backend calls for the Documents page go
@@ -79,4 +84,55 @@ export async function deleteDocument(
 
 export function downloadDocumentUrl(id: number): string {
   return `${apiBaseUrl()}/api/documents/${id}/download`;
+}
+
+export async function processDocument(
+  id: number,
+  signal?: AbortSignal,
+): Promise<ProcessingStatus> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}/api/documents/${id}/process`, {
+      method: "POST",
+      signal,
+    });
+  } catch {
+    throw new ApiError("Cannot reach the API server. Is the backend running?");
+  }
+  if (!response.ok) throw await parseError(response);
+  return (await response.json()) as ProcessingStatus;
+}
+
+export async function fetchProcessingStatus(
+  id: number,
+  signal?: AbortSignal,
+): Promise<ProcessingStatus> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}/api/documents/${id}/processing-status`, {
+      signal,
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new ApiError("Cannot reach the API server. Is the backend running?");
+  }
+  if (!response.ok) throw await parseError(response);
+  return (await response.json()) as ProcessingStatus;
+}
+
+export async function fetchDocumentContent(
+  id: number,
+  signal?: AbortSignal,
+): Promise<DocumentContent> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}/api/documents/${id}/content`, {
+      signal,
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new ApiError("Cannot reach the API server. Is the backend running?");
+  }
+  if (!response.ok) throw await parseError(response);
+  return (await response.json()) as DocumentContent;
 }
