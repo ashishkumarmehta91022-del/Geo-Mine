@@ -111,9 +111,11 @@ export default function DashboardPage() {
                         ? "Live (Steps 3–5)"
                         : item.path === "/data-explorer"
                           ? "Live (Step 7)"
-                          : item.path === "/validation"
-                            ? "Live (Step 6)"
-                            : "Planned"}
+                          : item.path === "/knowledge"
+                            ? "Live (Step 8)"
+                            : item.path === "/validation"
+                              ? "Live (Step 6)"
+                              : "Planned"}
                   </span>
                 </div>
               ))}

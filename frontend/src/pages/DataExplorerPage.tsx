@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import PageHeader from "@/components/ui/PageHeader";
 import StateBlock from "@/components/ui/StateBlock";
 import { listRecords } from "@/lib/recordsApi";
@@ -154,6 +155,13 @@ export default function DataExplorerPage() {
             </button>
           </div>
         </div>
+        <p className="mt-3 text-xs text-gray-400">
+          Prefer full-text search?{" "}
+          <Link to="/knowledge" className="text-brand-600 underline">
+            Open Knowledge Search
+          </Link>{" "}
+          — it searches pages, records and validation results with provenance.
+        </p>
       </section>
 
       {/* Results */}

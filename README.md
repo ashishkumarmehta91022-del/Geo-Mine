@@ -247,6 +247,44 @@ extra model files); scanned pages OCR at ~1–3 s/page on CPU; handwriting and
 very low-quality scans may yield low confidence (flagged, not guessed);
 pages whose scans contain no text honestly report `no_text`.
 
+## Knowledge Base & Retrieval (Step 8)
+
+**The Knowledge Base is the retrieval/index layer — it is NOT a source of
+truth, NOT RAG, and contains no LLM.** Source tables (documents,
+document_pages, extracted_records, validation_results) remain authoritative;
+every index entry points back to them.
+
+**Retrieval units:** document pages (incl. OCR pages with confidence) ·
+structured records (raw + normalized value, entity, metric, period,
+validation status) · validation results (incl. conflicts — both sides stay
+searchable, no winner is ever selected).
+
+**Search:** `GET /api/search?q=...` — keyword search, `"exact phrase"` search,
+plus exact filters (document, entity, metric, reporting period, extraction
+method, validation status) with `limit`/`offset` pagination (max 100).
+`GET /api/search/stats` exposes factual index statistics (documents/pages/
+records/validations indexed, last update).
+
+**PostgreSQL-native:** entries carry a `tsvector` (`search_vector`, GIN-indexed,
+built with `to_tsvector('english', …)`) maintained by the indexing service.
+Deterministic ranking = documented arithmetic (phrase match > all keywords >
+entity/metric prefix > title hits > unit-type tie-break) — a higher score
+means *likely relevant*, never *factually correct*.
+
+**Index lifecycle (idempotent):** processing refreshes the document's entries
+in the same transaction as records/validation (delete-replace); document
+deletion cascades to the index (no orphaned search entries); explicit
+`index_document` / `remove_document` / `reindex_all` operations in
+`knowledge_service`.
+
+**Frontend:** new **Knowledge Search** page — search box, filters, factual
+index statistics, and provenance-rich results (document, page, source
+reference, raw→normalized values, validation status, OCR confidence, score).
+The Data Explorer links to it.
+
+> ⚠️ No LLM, no embeddings, no vector database, no answer generation —
+> those are future steps that will consume this retrieval foundation.
+
 ## Structured Data Layer & Automatic Validation (Step 7)
 
 Processing now runs the complete derived-data workflow in one transaction:
@@ -400,6 +438,7 @@ in safe read-only modes.
 - ✅ OCR pipeline (RapidOCR/ONNX): scanned-PDF and image OCR with bounding boxes + confidence, per-page native-vs-OCR dispatch for mixed PDFs, low-confidence review flagging, verbatim-text guarantee
 - ✅ Validation & data-quality engine: 7 deterministic rule families, PASS/WARNING/ERROR/REVIEW_REQUIRED model, human review queue with workflow states, cross-document conflict detection (both sides preserved, no auto-winner), original values never modified
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
+- ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -411,7 +450,7 @@ in safe read-only modes.
 - ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
 - ⬜ Reviewer workflow refinements (richer UI, review metrics)
 - ⬜ Authoritative field schema (demo structuring config is in place and swappable)
-- ⬜ Knowledge base (vector store — the base relational schema already exists)
+- ⬜ Knowledge base (vector store — relational retrieval index already exists as of Step 8)
 - ⬜ RAG pipeline
 - ⬜ AI Query (natural-language Q&A)
 - ⬜ Report generation

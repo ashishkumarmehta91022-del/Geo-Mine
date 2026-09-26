@@ -1,6 +1,6 @@
 """Centralized platform constants — single source of truth for status values.
 
-Document lifecycle (Step 4):
+Document lifecycle (Steps 4–7):
 
     uploaded -> processing -> processed
                      |
@@ -95,6 +95,18 @@ class ReviewStatus(StrEnum):
     IN_REVIEW = "in_review"
     RESOLVED = "resolved"
     REJECTED = "rejected"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {member.value for member in cls}
+
+
+class RetrievalUnitType(StrEnum):
+    """Which kind of source row a knowledge-index entry represents (Step 8)."""
+
+    PAGE = "page"
+    RECORD = "record"
+    VALIDATION = "validation"
 
     @classmethod
     def values(cls) -> set[str]:

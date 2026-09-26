@@ -157,6 +157,27 @@ structured values in `extracted_records` with `value_raw` verbatim and
 never modifies source values. Re-processing replaces derived layers
 idempotently; original files are never touched.
 
+## 1g. Knowledge base / retrieval layer (Step 8)
+
+```markdown
+   SOURCE OF TRUTH (authoritative)
+   documents · document_pages · extracted_records · validation_results
+         ↓  (index_document — delete-replace, idempotent, same tx as processing)
+   RETRIEVAL LAYER
+   knowledge_index (unit_type: page | record | validation; tsvector + GIN)
+         ↓  (GET /api/search — keyword, "exact phrase", exact filters, pagination)
+   Deterministic ranking (phrase > keywords > prefix > unit-type — arithmetic,
+   no LLM, no trust score; higher rank ≠ factually correct)
+         ↓
+   FUTURE: RAG / AI Query consume results WITH provenance (never answers
+   without a source)
+```
+
+Invariants: the retrieval layer is never authoritative; every result carries
+document/page/record/source-reference provenance; conflicting values remain
+searchable with both sides visible; reprocessing and deletion leave zero stale
+or orphaned entries.
+
 ## 2. Backend layering
 
 ```
@@ -182,6 +203,7 @@ app/
 │   │                 #   — demo rules labeled, authoritative rules via config
 ├── structuring/   # StructuredRecordBuilder + safe normalization (Step 7)
 │   │                 #   — demo field schema, raw ≠ derived
+├── knowledge/     # retrieval units, query parser, deterministic ranking (Step 8)
 ├── services/      # …, validation_service (runs, review queue, PATCH)
 └── utils/         # file_validation (allowlist, MIME policy, signatures)
 ```

@@ -5,6 +5,7 @@ from app.models.document import Document, DocumentPage
 from app.models.extracted_record import ExtractedRecord
 from app.models.validation import ValidationResult
 from app.models.audit import AuditLog
+from app.models.knowledge import KnowledgeIndex
 
 __all__ = [
     "Base",
@@ -14,4 +15,5 @@ __all__ = [
     "ExtractedRecord",
     "ValidationResult",
     "AuditLog",
+    "KnowledgeIndex",
 ]

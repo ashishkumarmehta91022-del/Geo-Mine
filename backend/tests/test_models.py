@@ -23,6 +23,7 @@ EXPECTED_TABLES = {
     "extracted_records",
     "validation_results",
     "audit_logs",
+    "knowledge_index",  # Step 8: retrieval layer (not a source of truth)
 }
 
 
@@ -126,20 +127,25 @@ def test_migration_revisions_chain():
     assert revisions["0001_initial_schema"] is None  # single root migration
     assert revisions["0002_extraction_columns"] == "0001_initial_schema"
     assert revisions["0003_validation_review"] == "0002_extraction_columns"
+    assert revisions["0004_structured_records"] == "0003_validation_review"
+    assert revisions["0005_knowledge_index"] == "0004_structured_records"
 
 
 def test_metadata_matches_initial_migration_ddl():
-    """Cross-check the initial migration's DDL against model metadata:
-    every expected table is created by the migration's upgrade()."""
+    """Cross-check migrations against model metadata: every table is created
+    by SOME migration in the chain (0001 for the foundation, later migrations
+    for layers added in Steps 5–8)."""
     from pathlib import Path
 
-    migration_path = (
-        Path(__file__).resolve().parents[1] / "alembic" / "versions" / "0001_initial_schema.py"
+    versions_dir = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    all_migration_ddl = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in versions_dir.glob("*.py")
+        if path.name != "__init__.py"
     )
-    source = migration_path.read_text(encoding="utf-8")
 
     for table in EXPECTED_TABLES:
-        assert f'"{table}"' in source, f"migration does not create {table}"
+        assert f'"{table}"' in all_migration_ddl, f"no migration creates {table}"
 
 
 def test_create_all_ddl_is_clean_sql():

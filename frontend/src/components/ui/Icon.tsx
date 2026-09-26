@@ -18,7 +18,8 @@ export type IconName =
   | "menu"
   | "close"
   | "refresh"
-  | "status";
+  | "status"
+  | "search";
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -115,6 +116,12 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     </>
   ),
   status: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  search: (
+    <>
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4.35-4.35" />
+    </>
+  ),
 };
 
 export function Icon({ name, className = "h-5 w-5" }: { name: IconName; className?: string }) {

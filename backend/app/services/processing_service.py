@@ -15,21 +15,24 @@ from collections.abc import Iterable
 from datetime import datetime, timezone
 from io import BytesIO
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.constants import DocumentStatus, TextExtractionStatus, ValidationStatus
 from app.config import settings
 from app.exceptions import AppError, DatabaseUnavailableError, NotFoundError
-from app.models import Document, DocumentPage, ExtractedRecord
+from app.models import Document, DocumentPage, ExtractedRecord, KnowledgeIndex
 from app.processing.base import DocumentExtractor, ExtractionResult
 from app.processing.registry import get_extractor
+from app.knowledge.units import units_from_rows
+from app.models import ValidationResult
 from app.services import validation_service
 from app.services.document_service import get_document
 from app.services.document_storage import DocumentStorage
 from app.structuring.builder import StructuredRecordBuilder
 from app.structuring.config import demo_config as demo_structuring_config
+from app.knowledge.units import units_from_rows
 
 logger = logging.getLogger(__name__)
 
@@ -180,8 +183,8 @@ def _persist_derived_data(
                 )
             )
 
-        # Flush so validation can see this document's fresh records before
-        # the commit — still inside the same transaction.
+        # Flush so validation/indexing can see this document's fresh rows
+        # before the commit — still inside the same transaction.
         db.flush()
 
         # --- automatic validation (Step 6 engine reused, no second engine) ---
@@ -189,6 +192,42 @@ def _persist_derived_data(
         outcomes = validation_service.compute_outcomes(scope)
         validation_service.write_outcomes(db, document, outcomes)  # no commit inside
         worst = validation_service._worst_status(outcomes)
+
+        # --- retrieval index refresh (Step 8; delete-replace, same tx) ---
+        # Re-read rows now that pages/records/validations are final in-session.
+        _, pages, records, validations = _load_rows_for_index(db, document.id)
+        db.execute(delete(KnowledgeIndex).where(KnowledgeIndex.document_id == document.id))
+        for draft in units_from_rows(pages, records, validations, document.filename):
+            db.add(
+                KnowledgeIndex(
+                    document_id=draft.document_id,
+                    page_id=draft.page_id,
+                    record_id=draft.record_id,
+                    validation_id=draft.validation_id,
+                    unit_type=draft.unit_type,
+                    title=draft.title,
+                    content=draft.content,
+                    source_reference=draft.source_reference,
+                    entity=draft.entity,
+                    metric=draft.metric,
+                    reporting_period=draft.reporting_period,
+                    extraction_method=draft.extraction_method,
+                    validation_status=draft.validation_status,
+                    ocr_confidence=draft.ocr_confidence,
+                )
+            )
+        db.execute(
+            text(
+                """
+                UPDATE knowledge_index
+                SET search_vector = to_tsvector('english',
+                    coalesce(title, '') || ' ' || coalesce(content, '') || ' ' ||
+                    coalesce(entity, '') || ' ' || coalesce(metric, ''))
+                WHERE document_id = :document_id
+                """
+            ),
+            {"document_id": document.id},
+        )
 
         # --- finalize document state: processing ≠ validation ---
         document.status = DocumentStatus.PROCESSED
@@ -210,6 +249,21 @@ def _persist_derived_data(
         logger.exception("Persisting derived data failed for document %s", document.id)
         _mark_failed(db, document, exc)
         raise ProcessingFailedError(message="Extraction succeeded but derived data could not be saved.") from exc
+
+
+def _load_rows_for_index(db: Session, document_id: int) -> tuple[Document, list, list, list]:
+    """In-session rows for index building (used by _persist_derived_data)."""
+    document = db.get(Document, document_id)
+    pages = db.execute(
+        select(DocumentPage).where(DocumentPage.document_id == document_id).order_by(DocumentPage.page_number)
+    ).scalars().all()
+    records = db.execute(
+        select(ExtractedRecord).where(ExtractedRecord.document_id == document_id).order_by(ExtractedRecord.id)
+    ).scalars().all()
+    validations = db.execute(
+        select(ValidationResult).where(ValidationResult.document_id == document_id).order_by(ValidationResult.id)
+    ).scalars().all()
+    return document, list(pages), list(records), list(validations)
 
 
 def _mark_failed_quietly_if_possible(db: Session, document_id: int) -> None:
