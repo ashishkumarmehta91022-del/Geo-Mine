@@ -129,6 +129,34 @@ provenance (document, page, record, source reference); conflicts preserve
 both sources and never pick a winner; runs are idempotent per document
 (results replaced atomically); same input + config ⇒ same results.
 
+## 1f. Structured data + automatic validation (Step 7)
+
+```markdown
+   ExtractionResult (pages/sheets/OCR — raw layer, preserved intact)
+         ↓
+   StructuredRecordBuilder (app/structuring — demo-labeled config)
+   ├─ spreadsheet sheets → typed rows (Mine/Value/Unit/Period aliases)
+   ├─ DOCX tables       → headers + rows
+   ├─ images            → one verbatim OCR record (never numerically interpreted)
+   └─ text blocks       → bounded verbatim records
+         ↓
+   RecordDraft (value_raw verbatim + normalized_value only when unambiguous,
+                method, confidence, source reference, metadata)
+         ↓
+   ONE transaction: replace pages → replace extracted_records →
+   load_validation_scope → compute_outcomes → write_outcomes
+   (Step 6 engine reused; no commit until everything succeeds)
+         ↓
+   documents.status = processed AND documents.validation_status =
+   pass | warning | error | review_required  (problems stay visible)
+```
+
+Raw source ≠ derived structured data: raw text lives in `document_pages`,
+structured values in `extracted_records` with `value_raw` verbatim and
+`normalized_value` NULL whenever normalization would be a guess. Validation
+never modifies source values. Re-processing replaces derived layers
+idempotently; original files are never touched.
+
 ## 2. Backend layering
 
 ```
@@ -152,6 +180,8 @@ app/
 │   └── extractors/   # pymupdf+ocr | python-docx | openpyxl | xlrd | pillow+ocr
 ├── validation/    # deterministic rule engine (DB-free): config, rules, parsing
 │   │                 #   — demo rules labeled, authoritative rules via config
+├── structuring/   # StructuredRecordBuilder + safe normalization (Step 7)
+│   │                 #   — demo field schema, raw ≠ derived
 ├── services/      # …, validation_service (runs, review queue, PATCH)
 └── utils/         # file_validation (allowlist, MIME policy, signatures)
 ```

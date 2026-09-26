@@ -1,12 +1,13 @@
-"""Processing service: runs the deterministic extraction pipeline.
+"""Processing service: extraction + structured records + automatic validation.
 
-Transaction/state guarantees:
-- `processing` is committed before extraction starts, so the state is visible.
-- On extractor failure the document is marked `failed` with the real error
-  preserved in `error_message` — never silently swallowed.
-- On success, existing page rows are replaced and new rows inserted in one
-  transaction together with the `processed` transition (no partial writes,
-  no duplicate page records on re-processing).
+Transaction/state guarantees (Step 7):
+- `processing` is committed before extraction starts, so state is observable.
+- On extractor failure the document is marked `failed` with the real error —
+  never silently swallowed.
+- On success, ONE transaction replaces page rows and structured records,
+  then embeds validation (load → compute → write) and sets the document's
+  `processed` + `validation_status` together. No partial derived data,
+  no duplicate rows on re-processing. Original files are never touched.
 """
 
 import logging
@@ -18,14 +19,17 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.constants import DocumentStatus, TextExtractionStatus
+from app.constants import DocumentStatus, TextExtractionStatus, ValidationStatus
 from app.config import settings
 from app.exceptions import AppError, DatabaseUnavailableError, NotFoundError
-from app.models import Document, DocumentPage
+from app.models import Document, DocumentPage, ExtractedRecord
 from app.processing.base import DocumentExtractor, ExtractionResult
 from app.processing.registry import get_extractor
+from app.services import validation_service
 from app.services.document_service import get_document
 from app.services.document_storage import DocumentStorage
+from app.structuring.builder import StructuredRecordBuilder
+from app.structuring.config import demo_config as demo_structuring_config
 
 logger = logging.getLogger(__name__)
 
@@ -102,20 +106,36 @@ def process_document(db: Session, document_id: int, storage: DocumentStorage) ->
         _mark_failed(db, document, exc)
         raise ProcessingFailedError(message=f"Extraction failed: {exc}") from exc
 
-    _persist_extraction(db, document, extraction, extractor)
+    # Structured records are built deterministically before any DB writes;
+    # a builder bug must not leave half-created derived data.
+    from app.structuring.builder import RecordDraft  # noqa: F401 — typing only
+
+    try:
+        drafts = StructuredRecordBuilder(demo_structuring_config()).build(extraction, document.id)
+    except Exception as exc:  # noqa: BLE001 — structuring failure is honest
+        logger.exception("Structuring failed for document %s", document.id)
+        _mark_failed(db, document, exc)
+        raise ProcessingFailedError(message=f"Structuring failed: {exc}") from exc
+
+    _persist_derived_data(db, document, extraction, drafts, extractor)
     return document
 
 
-def _persist_extraction(
+def _persist_derived_data(
     db: Session,
     document: Document,
     extraction: ExtractionResult,
+    drafts,
     extractor: DocumentExtractor,
 ) -> None:
-    """Replace page rows and finalize the `processed` state in one transaction."""
+    """Replace derived data (pages + records + validation) in ONE transaction.
+
+    Raw extraction (document_pages) is preserved as-is; structured records
+    and validation results are derived layers, replaced idempotently.
+    """
     extracted_at = datetime.now(timezone.utc)
     try:
-        # Replacement logic: old rows go, new rows come in, atomically.
+        # --- raw extraction layer (replaced, as in Steps 4–5) ---
         db.execute(delete(DocumentPage).where(DocumentPage.document_id == document.id))
         for section in extraction.sections:
             db.add(
@@ -134,23 +154,62 @@ def _persist_extraction(
                     structured_metadata=section.structured_metadata,
                 )
             )
+
+        # --- structured layer (Step 7; idempotent delete-replace) ---
+        db.execute(delete(ExtractedRecord).where(ExtractedRecord.document_id == document.id))
+        for draft in drafts:
+            db.add(
+                ExtractedRecord(
+                    document_id=document.id,
+                    entity_name=draft.entity_name,
+                    metric_name=draft.metric_name,
+                    metric_value=draft.numeric_value,
+                    unit=draft.unit,
+                    reporting_period=draft.reporting_period,
+                    source_reference=draft.source_reference,
+                    confidence=draft.confidence,
+                    validation_status="pending",
+                    value_raw=draft.raw_value,
+                    normalized_value=draft.normalized_value,
+                    extraction_method=draft.extraction_method,
+                    record_metadata={
+                        **draft.record_metadata,
+                        "review_required": draft.review_required,
+                        "page_number": draft.page_number,
+                    },
+                )
+            )
+
+        # Flush so validation can see this document's fresh records before
+        # the commit — still inside the same transaction.
+        db.flush()
+
+        # --- automatic validation (Step 6 engine reused, no second engine) ---
+        scope = validation_service.load_validation_scope(db, document.id)
+        outcomes = validation_service.compute_outcomes(scope)
+        validation_service.write_outcomes(db, document, outcomes)  # no commit inside
+        worst = validation_service._worst_status(outcomes)
+
+        # --- finalize document state: processing ≠ validation ---
         document.status = DocumentStatus.PROCESSED
         document.processed_at = extracted_at
         document.extraction_status = extraction.aggregate_text_status
         document.extractor_name = extraction.extractor_name
         document.extractor_version = extraction.extractor_version
         document.error_message = None
+        # Validation problems must stay visible on the document itself.
+        document.validation_status = worst
         db.commit()
     except OperationalError as exc:
         db.rollback()
-        logger.exception("Database unavailable while persisting extraction for document %s", document.id)
+        logger.exception("Database unavailable while persisting derived data for document %s", document.id)
         _mark_failed_quietly_if_possible(db, document.id)
         raise DatabaseUnavailableError from exc
     except SQLAlchemyError as exc:
         db.rollback()
-        logger.exception("Persisting extraction failed for document %s", document.id)
+        logger.exception("Persisting derived data failed for document %s", document.id)
         _mark_failed(db, document, exc)
-        raise ProcessingFailedError(message="Extraction succeeded but results could not be saved.") from exc
+        raise ProcessingFailedError(message="Extraction succeeded but derived data could not be saved.") from exc
 
 
 def _mark_failed_quietly_if_possible(db: Session, document_id: int) -> None:

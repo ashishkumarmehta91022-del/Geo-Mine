@@ -40,6 +40,8 @@ class Document(TimestampMixin, Base):
     extractor_version: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     # Preserved failure information from the last processing attempt (null when OK).
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Rollup of the latest validation run (Step 7): pass | warning | error | review_required.
+    validation_status: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
 
     pages: Mapped[list["DocumentPage"]] = relationship(
         back_populates="document",

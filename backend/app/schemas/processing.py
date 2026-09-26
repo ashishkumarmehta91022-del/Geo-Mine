@@ -15,6 +15,14 @@ class ExtractionStats(BaseModel):
     total_units: int = 0
 
 
+class ValidationSummaryInfo(BaseModel):
+    total_checks: int = 0
+    passed: int = 0
+    warnings: int = 0
+    errors: int = 0
+    review_required: int = 0
+
+
 class ProcessingStatusResponse(BaseModel):
     document_id: int
     status: str
@@ -23,6 +31,10 @@ class ProcessingStatusResponse(BaseModel):
     extractor: dict[str, str | None]
     statistics: ExtractionStats
     error_message: str | None
+    # --- Step 7: combined derived-data state ---
+    validation_status: str | None = None
+    records_extracted: int = 0
+    validation: ValidationSummaryInfo = ValidationSummaryInfo()
 
 
 class ContentSection(BaseModel):

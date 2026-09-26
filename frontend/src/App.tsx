@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
 import { NAV_ITEMS } from "@/components/layout/navigation";
 import DashboardPage from "@/pages/DashboardPage";
+import DataExplorerPage from "@/pages/DataExplorerPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import ValidationPage from "@/pages/ValidationPage";
@@ -13,12 +14,13 @@ export default function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         {/* Live page (Step 1) */}
         <Route path="/dashboard" element={<DashboardPage />} />
-        {/* Live pages (Steps 3–6) */}
+        {/* Live pages (Steps 3–7) */}
         <Route path="/documents" element={<DocumentsPage />} />
+        <Route path="/data-explorer" element={<DataExplorerPage />} />
         <Route path="/validation" element={<ValidationPage />} />
         {/* Placeholder pages for modules implemented in later steps */}
         {NAV_ITEMS.filter(
-          (item) => !["/dashboard", "/documents", "/validation"].includes(item.path),
+          (item) => !["/dashboard", "/documents", "/data-explorer", "/validation"].includes(item.path),
         ).map((item) => (
           <Route key={item.path} path={item.path} element={<PlaceholderPage />} />
         ))}

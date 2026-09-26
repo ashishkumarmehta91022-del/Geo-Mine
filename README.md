@@ -247,6 +247,56 @@ extra model files); scanned pages OCR at ~1–3 s/page on CPU; handwriting and
 very low-quality scans may yield low confidence (flagged, not guessed);
 pages whose scans contain no text honestly report `no_text`.
 
+## Structured Data Layer & Automatic Validation (Step 7)
+
+Processing now runs the complete derived-data workflow in one transaction:
+
+```
+Upload → Process/Extract → OCR when required → Structured records
+       → Automatic validation → Validated / Warning / Failed / Review Required
+```
+
+**Raw ≠ derived — both are always kept.** `document_pages` holds the raw
+extracted/OCR text; `extracted_records` holds the structured layer with
+verbatim `value_raw` alongside a `normalized_value` that exists **only when
+the normalization is unambiguous**. `"1O5"` is stored as `"1O5"` with
+`normalized_value = NULL` — never silently converted to `105`.
+
+**Safe normalization (deterministic only):** whitespace/Unicode NFC, canonical
+number forms ("1,200" → "1200"), unambiguous dates → ISO-8601, verbatim
+financial-year labels ("2025-26"). No semantic guessing, no fuzzy matching,
+no OCR auto-correction, no inferred values.
+
+**Provenance per record:** document, page, source reference, extraction
+method (`native_text | ocr | table | spreadsheet | docx`), confidence,
+review flag, extractor/metadata JSONB.
+
+**Automatic validation:** after structured records are created, the Step 6
+engine runs automatically (same engine — no second implementation). The
+outcome is written to `documents.validation_status` (`pass | warning | error |
+review_required`) so problems stay visible on the document itself — e.g.
+processing succeeds while low OCR confidence keeps `validation_status =
+review_required`.
+
+**Idempotent re-processing:** pages, records and validation results are each
+replaced atomically on every run — 10 records stay 10 records however many
+times you reprocess. Original uploaded files are never modified or deleted.
+
+**APIs:** `POST /api/documents/{id}/process` now returns the combined state
+(records count + validation summary). New: `GET /api/records` — cross-document
+structured records with exact-match filters (entity, metric, reporting period,
+extraction method, validation status), the foundation for future knowledge-base
+and reporting layers (exact matching only; no fuzzy entity resolution).
+
+**Frontend:** new **Data Explorer** page (raw vs normalized value side by side,
+filterable); Documents processing status now shows record count + validation
+summary; Dashboard roadmap updated.
+
+> ⚠️ **Demonstration schema:** the field mappings (DEMO_COAL_PRODUCTION etc.),
+> column aliases and guardrails in `app/structuring/config.py` are **demo
+> defaults — not official CMPDI/CIL field definitions**. Authoritative schemas
+> replace them via configuration without engine changes.
+
 ## Validation & Data Quality Engine (Step 6)
 
 **Deterministic rule-based validation over extracted/OCR data — no LLM, no
@@ -349,6 +399,7 @@ in safe read-only modes.
 - ✅ Deterministic processing pipeline: extractor registry (PyMuPDF / python-docx / openpyxl / xlrd / Pillow), typed extraction with provenance + source references, transactional persistence with idempotent re-processing, processing/status/content APIs, Documents page process button + extracted-content viewer
 - ✅ OCR pipeline (RapidOCR/ONNX): scanned-PDF and image OCR with bounding boxes + confidence, per-page native-vs-OCR dispatch for mixed PDFs, low-confidence review flagging, verbatim-text guarantee
 - ✅ Validation & data-quality engine: 7 deterministic rule families, PASS/WARNING/ERROR/REVIEW_REQUIRED model, human review queue with workflow states, cross-document conflict detection (both sides preserved, no auto-winner), original values never modified
+- ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -359,7 +410,7 @@ in safe read-only modes.
 
 - ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
 - ⬜ Reviewer workflow refinements (richer UI, review metrics)
-- ⬜ Validation engine
+- ⬜ Authoritative field schema (demo structuring config is in place and swappable)
 - ⬜ Knowledge base (vector store — the base relational schema already exists)
 - ⬜ RAG pipeline
 - ⬜ AI Query (natural-language Q&A)

@@ -82,6 +82,10 @@ def seed() -> None:
                 source_reference="DEMO page 2, table 1",
                 confidence=0.9500,
                 validation_status="valid",
+                value_raw="1234.5678",  # Step 7: verbatim source value
+                normalized_value="1234.5678",
+                extraction_method="spreadsheet",
+                record_metadata={"demo": True},
             ),
             ExtractedRecord(
                 document_id=document.id,
@@ -95,6 +99,10 @@ def seed() -> None:
                 source_reference="DEMO page 2, table 1",
                 confidence=0.8800,
                 validation_status="pending",
+                value_raw="987.6543",
+                normalized_value="987.6543",
+                extraction_method="spreadsheet",
+                record_metadata={"demo": True},
             ),
             ExtractedRecord(
                 document_id=document.id,
@@ -108,6 +116,10 @@ def seed() -> None:
                 source_reference="DEMO page 1, header",
                 confidence=0.7200,
                 validation_status="pending",
+                value_raw="312.4",
+                normalized_value="312.4",
+                extraction_method="native_text",
+                record_metadata={"demo": True},
             ),
         ]
         session.add_all(records)

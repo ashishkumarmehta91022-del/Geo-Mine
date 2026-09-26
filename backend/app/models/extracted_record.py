@@ -5,9 +5,10 @@ Structured geological/mining/production values extracted from documents
 """
 
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
-from sqlalchemy import ForeignKey, Index, Numeric, String
+from sqlalchemy import ForeignKey, Index, Numeric, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -49,6 +50,16 @@ class ExtractedRecord(TimestampMixin, Base):
     validation_status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default="pending", index=True
     )
+
+    # --- Step 7: structured-data layer (raw ≠ derived; both always kept) ---
+    # Verbatim source text ("1O5" stays "1O5"; NULL when the value was numeric-only).
+    value_raw: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Safely normalized value — NULL when no unambiguous normalization exists.
+    normalized_value: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    # How this record was obtained: native_text | ocr | table | spreadsheet | docx.
+    extraction_method: Mapped[Optional[str]] = mapped_column(String(32), nullable=True, index=True)
+    # Provenance/evidence (page index, sheet name, cell refs, extractor info...).
+    record_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 
     document: Mapped[Document] = relationship(back_populates="extracted_records")
     page: Mapped[Optional[DocumentPage]] = relationship()
