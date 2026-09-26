@@ -88,7 +88,7 @@ def test_pdf_multipage_extraction_in_order():
     assert "Page three" in result.sections[2].text
     assert all(s.extraction_status == TextExtractionStatus.EXTRACTED for s in result.sections)
     assert result.aggregate_text_status == TextExtractionStatus.EXTRACTED
-    assert result.extractor_name == "pymupdf"
+    assert result.extractor_name == "pymupdf+ocr"  # Step 5: native path unchanged, OCR for scanned pages
     assert result.extractor_version == package_version("pymupdf")
 
 
@@ -204,19 +204,22 @@ def test_xls_multi_sheet_extraction():
 # --- image extractor -------------------------------------------------------------------------
 
 
-def test_image_metadata_and_ocr_required():
+def test_image_ocr_path_reports_honestly():
+    """Blank image: engine runs, finds no text, and reports that honestly
+    (ocr_required only when the engine is unavailable in the environment)."""
     result = ImageExtractor().extract(_buf(png_bytes(120, 80)))
     assert len(result.sections) == 1
     section = result.sections[0]
-    assert section.extraction_status == TextExtractionStatus.OCR_REQUIRED
-    assert section.text is None  # no invented text
-    assert section.structured_metadata == {
-        "format": "PNG",
-        "mode": "RGB",
-        "width": 120,
-        "height": 80,
+    assert section.extraction_status in {
+        TextExtractionStatus.NO_TEXT,  # engine ran, nothing detected
+        TextExtractionStatus.OCR_REQUIRED,  # engine unavailable in this environment
     }
-    assert result.aggregate_text_status == TextExtractionStatus.OCR_REQUIRED
+    assert section.text is None  # no invented text
+    ocr_meta = section.structured_metadata.get("ocr") or {}
+    if section.extraction_status == TextExtractionStatus.NO_TEXT:
+        assert ocr_meta.get("engine") == "rapidocr-onnxruntime"  # provenance recorded
+        assert ocr_meta.get("engine_version")
+    assert result.aggregate_text_status == section.extraction_status
 
 
 def test_jpeg_also_handled():

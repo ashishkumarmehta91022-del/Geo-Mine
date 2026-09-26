@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 class ExtractionStats(BaseModel):
     extracted: int = 0
+    ocr_extracted: int = 0
     no_text: int = 0
     ocr_required: int = 0
     failed: int = 0
@@ -31,6 +32,9 @@ class ContentSection(BaseModel):
     text: str | None
     extraction_status: str
     structured: dict[str, Any] | None
+    # Lifted from structured_metadata["ocr"] when present (confidence,
+    # review_required, bounding boxes, engine info) for easier consumption.
+    ocr: dict[str, Any] | None = None
 
 
 class DocumentContentResponse(BaseModel):

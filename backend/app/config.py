@@ -47,6 +47,17 @@ class Settings(BaseSettings):
     # Maximum accepted upload size in megabytes.
     max_upload_size_mb: int = 25
 
+    # --- OCR (Step 5) ---
+    # Box/mean confidences below this flag the unit `review_required`.
+    # Never used to ALTER text — OCR output is always preserved verbatim.
+    ocr_confidence_threshold: float = 0.70
+    # Wall-clock cap per OCR call (protects against pathological inputs).
+    ocr_timeout_seconds: float = 120.0
+    # Reject absurd images before OCR (decompression-bomb guardrail).
+    ocr_max_image_pixels: int = 40_000_000
+    # Render zoom for scanned PDF pages before OCR (~2.0 ≈ 144 dpi).
+    pdf_ocr_zoom: float = 2.0
+
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 

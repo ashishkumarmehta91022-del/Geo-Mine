@@ -78,6 +78,30 @@ transition); failures committed with the real error message, never swallowed.
 **Step 4 creates the deterministic extraction foundation only — no OCR, no AI,
 no report generation.**
 
+## 1d. OCR layer (Step 5)
+
+```markdown
+   PDF page (scanned, < 8 native chars) or image document
+         ↓
+   Pillow validation (integrity, dimension + pixel-count guardrails)
+         ↓
+   OcrEngine.extract(bytes)          ← interface; RapidOcrEngine today,
+         ↓                             (rapidocr-onnxruntime 1.2.3 / ONNX 1.30,
+         ↓                              lazy singleton, wall-clock timeout)
+   OcrResult (verbatim text, mean confidence, bounding boxes,
+              review_required = any box < OCR_CONFIDENCE_THRESHOLD)
+         ↓
+   ExtractedSection (status ocr_extracted / no_text / failed,
+                     structured_metadata["ocr"] = engine + boxes + confidences)
+         ↓
+   document_pages row (document_id → page_number → source reference kept)
+```
+
+Native-text PDF pages bypass OCR entirely; mixed PDFs decide **per page**.
+OCR text is never auto-corrected — uncertain detections keep their exact
+characters and are flagged for human review. Engine failures isolate to the
+single page (`failed`) instead of poisoning the document.
+
 ## 2. Backend layering
 
 ```
@@ -95,8 +119,10 @@ app/
 ├── services/      # document_service (upload/list/detail/delete),
 │                  #   document_storage (DocumentStorage interface + LocalFileStorage),
 │                  #   processing_service (transactional extraction pipeline)
-├── processing/    # extractor base + registry + normalization (no AI/OCR ever)
-│   └── extractors/   # pymupdf | python-docx | openpyxl | xlrd | pillow
+├── processing/    # extractor base + registry + normalization (no AI ever)
+│   ├── ocr/          # OcrEngine interface, OcrResult models, RapidOCR engine,
+│   │                 #   availability service, OCR pipeline helper
+│   └── extractors/   # pymupdf+ocr | python-docx | openpyxl | xlrd | pillow+ocr
 └── utils/         # file_validation (allowlist, MIME policy, signatures)
 ```
 

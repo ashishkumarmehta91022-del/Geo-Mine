@@ -28,9 +28,10 @@ class DocumentStatus(StrEnum):
 class TextExtractionStatus(StrEnum):
     """Per-page text outcome — honest about what extraction achieved."""
 
-    EXTRACTED = "extracted"  # meaningful text present
-    NO_TEXT = "no_text"  # valid file, but no text layer (future: OCR)
-    OCR_REQUIRED = "ocr_required"  # images always need the future OCR step
+    EXTRACTED = "extracted"  # native text layer present (PDF/DOCX)
+    OCR_EXTRACTED = "ocr_extracted"  # text recovered via OCR (Step 5)
+    NO_TEXT = "no_text"  # valid file, but neither text layer nor OCR found text
+    OCR_REQUIRED = "ocr_required"  # OCR could not run (engine unavailable) — future step
     FAILED = "failed"  # extractor could not read this unit
 
     @classmethod

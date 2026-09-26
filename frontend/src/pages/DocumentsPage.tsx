@@ -461,12 +461,36 @@ export default function DocumentsPage() {
                         </span>
                       </div>
                       <div className="px-3 py-2.5">
-                        {section.type === "image" ? (
+                        {section.ocr && (
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                                section.ocr.review_required
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-emerald-100 text-emerald-700"
+                              }`}
+                            >
+                              {section.ocr.review_required
+                                ? `Review required (${section.ocr.low_confidence_count ?? 0} low-confidence box${(section.ocr.low_confidence_count ?? 0) === 1 ? "" : "es"})`
+                                : "OCR confident"}
+                            </span>
+                            {typeof section.ocr.confidence === "number" && (
+                              <span className="text-[10px] text-gray-500">
+                                mean confidence {(section.ocr.confidence * 100).toFixed(1)}%
+                              </span>
+                            )}
+                            <span className="text-[10px] text-gray-400">
+                              {section.ocr.engine} {section.ocr.engine_version} ·{" "}
+                              {section.ocr.bounding_boxes?.length ?? 0} boxes
+                            </span>
+                          </div>
+                        )}
+                        {section.type === "image" && section.extraction_status === "ocr_required" ? (
                           <p className="text-xs text-gray-500">
                             Image ({section.structured?.format as string ?? "unknown"},{" "}
                             {section.structured?.width as number ?? "?"}×{section.structured?.height as number ?? "?"}{" "}
-                            px, mode {section.structured?.mode as string ?? "?"}) — text extraction requires the
-                            future OCR step.
+                            px, mode {section.structured?.mode as string ?? "?"}) — OCR engine unavailable in this
+                            environment.
                           </p>
                         ) : section.structured?.rows ? (
                           <SheetPreview structured={section.structured} />

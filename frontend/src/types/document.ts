@@ -46,6 +46,26 @@ export interface ProcessingStatus {
   error_message: string | null;
 }
 
+export interface OcrBoundingBoxInfo {
+  text: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  confidence: number;
+}
+
+export interface OcrInfo {
+  engine?: string | null;
+  engine_version?: string | null;
+  confidence?: number | null;
+  review_required?: boolean;
+  low_confidence_count?: number;
+  confidence_threshold?: string | null;
+  bounding_boxes?: OcrBoundingBoxInfo[];
+  error?: string;
+}
+
 export interface ContentSection {
   type: "page" | "sheet" | "image" | string;
   number: number;
@@ -53,6 +73,8 @@ export interface ContentSection {
   text: string | null;
   extraction_status: string;
   structured: Record<string, unknown> | null;
+  /** Present when OCR ran for this unit (confidence, boxes, review flag). */
+  ocr?: OcrInfo | null;
 }
 
 export interface DocumentContent {

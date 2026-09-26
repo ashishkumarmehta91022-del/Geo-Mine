@@ -80,6 +80,9 @@ def document_content_route(document_id: int, db: Session = Depends(get_db)) -> D
             text=page.extracted_text,
             extraction_status=page.extraction_status,
             structured=page.structured_metadata,
+            ocr=(page.structured_metadata or {}).get("ocr")
+            if isinstance(page.structured_metadata, dict)
+            else None,
         )
         for page in processing_service.iter_document_sections(db, document.id)
     ]

@@ -205,6 +205,48 @@ swappable for S3/Azure/MinIO later without touching routes or services.
 - Path-traversal, null-byte and absolute-path filenames are sanitized;
   stored names are always server-generated.
 
+## OCR & Scanned Document Processing (Step 5)
+
+**Step 5 adds deterministic OCR — still no LLM/RAG/AI of any kind.**
+
+**Selected engine:** `rapidocr-onnxruntime` 1.2.3 (ONNX Runtime 1.30.0, CPU).
+PaddleOCR's model stack executed on ONNX Runtime — chosen because PaddleOCR
+itself has no distribution for this environment (Python 3.14 on Windows),
+while RapidOCR runs with **no system dependencies** (models ship inside the
+wheel) and is fully deterministic. Per-word bounding boxes and confidence
+scores are preserved.
+
+**Workflow:** image bytes → Pillow validation (integrity, dimension guardrails,
+decompression-bomb cap) → OCR engine (wall-clock timeout) → verbatim text +
+boxes + confidences → `review_required` flag for boxes under
+`OCR_CONFIDENCE_THRESHOLD` (default 0.70) → stored in `document_pages.structured_metadata["ocr"]`.
+
+**Native vs scanned PDFs — decided per page, never per document:**
+
+| Page kind | Detection | Path |
+| --------- | --------- | ---- |
+| Native text | ≥ 8 extracted chars (PyMuPDF) | Step 4 path, no OCR |
+| Scanned / image-only | < 8 chars | rendered at `PDF_OCR_ZOOM` (≈144 dpi) → OCR → `ocr_extracted` |
+
+A mixed PDF (native, scan, native, scan…) processes each page independently;
+scan pages never reclassify the document.
+
+**Faithfulness rule:** OCR text is stored **verbatim**. A low-confidence `1O5`
+is never silently "corrected" to `105` — it is flagged `review_required: true`
+with its confidence and bounding box, and left for human review.
+
+**Statuses per page/image:** `extracted` (native) · `ocr_extracted` · `no_text`
+· `failed` (engine error isolated to that page) · `ocr_required` (engine
+unavailable). Document-level aggregate includes `mixed`.
+
+**OCR configuration:** `OCR_CONFIDENCE_THRESHOLD=0.70`, `OCR_TIMEOUT_SECONDS=120`,
+`OCR_MAX_IMAGE_PIXELS=40000000`, `PDF_OCR_ZOOM=2.0` (see `.env.example`).
+
+**Known limitations:** Latin-script models bundled (other languages need
+extra model files); scanned pages OCR at ~1–3 s/page on CPU; handwriting and
+very low-quality scans may yield low confidence (flagged, not guessed);
+pages whose scans contain no text honestly report `no_text`.
+
 ## Document Processing Pipeline (Step 4)
 
 **Step 4 does NOT perform OCR, does NOT use AI, and does NOT generate reports.**
@@ -260,6 +302,7 @@ in safe read-only modes.
 - ✅ PostgreSQL foundation: SQLAlchemy engine + sessions, ORM models for the 5 foundation tables, Alembic migration `0001_initial_schema`, DEMO seed script
 - ✅ Document ingestion: upload API with defense-in-depth validation (allowlist, MIME policy, magic bytes/OOXML checks, streaming size limit), swappable storage layer (local FS for dev), list/detail/download/delete APIs, functional Documents page UI
 - ✅ Deterministic processing pipeline: extractor registry (PyMuPDF / python-docx / openpyxl / xlrd / Pillow), typed extraction with provenance + source references, transactional persistence with idempotent re-processing, processing/status/content APIs, Documents page process button + extracted-content viewer
+- ✅ OCR pipeline (RapidOCR/ONNX): scanned-PDF and image OCR with bounding boxes + confidence, per-page native-vs-OCR dispatch for mixed PDFs, low-confidence review flagging, verbatim-text guarantee
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -269,7 +312,7 @@ in safe read-only modes.
 **Not yet implemented (later steps):**
 
 - ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
-- ⬜ OCR for scanned reports and images (`no_text`/`ocr_required` items are already flagged and queued for it)
+- ⬜ Validation engine (uses existing `review_required`/confidence signals as input)
 - ⬜ Validation engine
 - ⬜ Knowledge base (vector store — the base relational schema already exists)
 - ⬜ RAG pipeline

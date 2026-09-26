@@ -7,6 +7,7 @@ extractors use — no binary blobs committed to the repo.
 import io
 from datetime import datetime
 
+from PIL import Image, ImageDraw, ImageFont
 from docx import Document as DocxDocument
 from openpyxl import Workbook
 from openpyxl.cell.cell import Cell
@@ -25,6 +26,37 @@ def pdf_bytes(pages: list[str]) -> bytes:
         page = doc.new_page()
         if text:
             page.insert_textbox(page.rect, text, fontsize=12)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def rendered_text_image_bytes(text: str, size: tuple[int, int] = (700, 180)) -> bytes:
+    """A PNG containing rendered text — a deterministic stand-in for a scan."""
+    image = Image.new("RGB", size, "white")
+    draw = ImageDraw.Draw(image)
+    try:
+        font = ImageFont.load_default(size=52)
+    except TypeError:  # older Pillow without sized default font
+        font = ImageFont.load_default()
+    draw.text((24, size[1] // 3), text, fill="black", font=font)
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def pdf_bytes_with_image_pages(page_specs: list[str | None]) -> bytes:
+    """Mixed PDF: each entry is native page text, or None for a scanned
+    (image-only) page built from a rendered-text image."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    for spec in page_specs:
+        page = doc.new_page()
+        if spec is None:
+            page.insert_image(page.rect, stream=rendered_text_image_bytes("SCANNED PAGE 12345"))
+        else:
+            page.insert_textbox(page.rect, spec, fontsize=12)
     data = doc.tobytes()
     doc.close()
     return data
