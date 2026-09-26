@@ -148,6 +148,8 @@ Copy `.env.example` to `.env` (root and/or `backend/`) and fill in real values.
 | `ENVIRONMENT`   | backend   | No                 | `development` / `production`              |
 | `DEBUG`         | backend   | No                 | Verbose logging when `true`               |
 | `CORS_ORIGINS`  | backend   | No                 | Comma-separated allowed origins           |
+| `DOCUMENT_STORAGE_PATH` | backend | No             | Local storage dir for uploads (default `./storage/documents`) |
+| `MAX_UPLOAD_SIZE_MB` | backend   | No                 | Upload size limit (default `25`)          |
 | `VITE_API_BASE_URL` | frontend | No              | Override API origin (empty = same origin via dev proxy) |
 
 The application **must and does start without any AI credentials**.
@@ -168,6 +170,41 @@ Open <http://localhost:5173>. The header shows a live **API online/offline**
 indicator; the Dashboard shows backend/database status. Verify the API
 directly at <http://localhost:8000/api/health>.
 
+## Document Upload & Storage (Step 3)
+
+The platform accepts original report files and registers them for later
+processing pipelines (OCR/extraction are **not** part of this step).
+
+**Supported file types (enforced allowlist):** PDF, DOCX, XLSX, XLS, PNG, JPG, JPEG
+— validated by extension **and** content signature (magic bytes for PDF/PNG/JPEG,
+ZIP-container + required OOXML entries for DOCX/XLSX), plus a MIME-type policy.
+
+**Upload size limit:** `MAX_UPLOAD_SIZE_MB` (default **25 MB**), enforced while
+streaming — files are never fully buffered in memory.
+
+**Local storage (development):** `DOCUMENT_STORAGE_PATH` (default `./storage/documents`).
+Files are stored under generated UUID keys (never the client filename); the
+original filename is kept as metadata only. The storage layer is an interface —
+swappable for S3/Azure/MinIO later without touching routes or services.
+
+**API endpoints:**
+
+| Method | Path                    | Purpose                                  |
+| ------ | ----------------------- | ---------------------------------------- |
+| POST   | `/api/documents/upload` | Multipart upload (`upload` field) → 201  |
+| GET    | `/api/documents`        | Paginated list (`page`, `page_size` ≤ 100) |
+| GET    | `/api/documents/{id}`   | Metadata only (404 if missing)           |
+| GET    | `/api/documents/{id}/download` | Streams the original file          |
+| DELETE | `/api/documents/{id}`   | Removes record + stored file             |
+
+**Security limitations (by design at this stage):**
+
+- **No authentication / authorization yet** — upload and deletion are
+  unrestricted until the auth step; do not expose the API publicly.
+- Uploaded files are stored, never executed or rendered.
+- Path-traversal, null-byte and absolute-path filenames are sanitized;
+  stored names are always server-generated.
+
 ## Current Implementation Status
 
 **Done (Step 1 — Foundation):**
@@ -175,6 +212,7 @@ directly at <http://localhost:8000/api/health>.
 - ✅ Repository layout: `frontend/`, `backend/`, `data/`, `docs/`, `scripts/`
 - ✅ FastAPI backend with modular structure, `GET /api/health`, CORS, central error handling
 - ✅ PostgreSQL foundation: SQLAlchemy engine + sessions, ORM models for the 5 foundation tables, Alembic migration `0001_initial_schema`, DEMO seed script
+- ✅ Document ingestion: upload API with defense-in-depth validation (allowlist, MIME policy, magic bytes/OOXML checks, streaming size limit), swappable storage layer (local FS for dev), list/detail/download/delete APIs, functional Documents page UI
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -183,7 +221,7 @@ directly at <http://localhost:8000/api/health>.
 
 **Not yet implemented (later steps):**
 
-- ⬜ Document processing (upload, PDF/Excel parsing)
+- ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
 - ⬜ OCR for scanned reports
 - ⬜ Data extraction and structuring
 - ⬜ Validation engine

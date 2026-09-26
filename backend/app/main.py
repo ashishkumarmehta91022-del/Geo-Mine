@@ -12,7 +12,7 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health
+from app.api.routes import documents, health
 from app.config import settings
 from app.db import probe_database
 from app.exceptions import register_exception_handlers
@@ -57,3 +57,4 @@ app.add_middleware(
 
 register_exception_handlers(app)
 app.include_router(health.router)
+app.include_router(documents.router)

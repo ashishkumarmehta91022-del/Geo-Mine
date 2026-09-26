@@ -1,74 +1,19 @@
-"""Database integration tests — REQUIRE a reachable PostgreSQL with migrations applied.
+"""Database integration tests — REQUIRE PostgreSQL (see conftest.py for the
+skip contract). Run with:
 
-These tests are honestly separated: they SKIP (never fake-pass) when
-CMPDI_TEST_DATABASE_URL is unset or the database is unreachable.
-
-Run them with (after `alembic upgrade head` on a dev database):
-
-    CMPDI_TEST_DATABASE_URL=postgresql://user:pass@localhost:5432/cmpdi_reporting pytest -m db
-
-The test database is cleaned and re-migrated by fixtures here.
+    CMPDI_TEST_DATABASE_URL=postgresql://... pytest -m db
 """
 
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, text
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-REPO_ROOT = BACKEND_DIR.parent
+from tests.conftest import BACKEND_DIR, REPO_ROOT
 
 pytestmark = pytest.mark.db
-
-
-def _test_database_url() -> str | None:
-    return os.environ.get("CMPDI_TEST_DATABASE_URL")
-
-
-@pytest.fixture(scope="module")
-def pg_url() -> str:
-    """Skip the whole module unless PostgreSQL is explicitly provided AND reachable."""
-    url = _test_database_url()
-    if not url:
-        pytest.skip("CMPDI_TEST_DATABASE_URL not set — PostgreSQL integration tests skipped", allow_module_level=False)
-    engine = create_engine(url, connect_args={"connect_timeout": 3})
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"PostgreSQL unreachable ({exc.__class__.__name__}) — integration tests skipped")
-    finally:
-        engine.dispose()
-    return url
-
-
-@pytest.fixture(scope="module")
-def migrated_engine(pg_url: str):
-    """Clean the test database, run Alembic migrations, yield a live engine."""
-    from alembic import command
-    from alembic.config import Config
-
-    os.environ["ALEMBIC_DATABASE_URL"] = pg_url
-    app_engine = create_engine(pg_url)
-
-    # Start from a clean slate.
-    from app.models import Base
-
-    Base.metadata.drop_all(app_engine)
-    with app_engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
-        conn.commit()
-
-    alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-    alembic_cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    command.upgrade(alembic_cfg, "head")
-
-    yield app_engine
-
-    app_engine.dispose()
 
 
 def test_alembic_upgrade_creates_all_foundation_tables(migrated_engine):
@@ -81,7 +26,8 @@ def test_alembic_upgrade_creates_all_foundation_tables(migrated_engine):
         "validation_results",
         "audit_logs",
     } <= tables
-    version = migrated_engine.connect().execute(text("SELECT version_num FROM alembic_version")).scalar()
+    with migrated_engine.connect() as conn:
+        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
     assert version == "0001_initial_schema"
 
 
@@ -157,6 +103,7 @@ def test_health_reports_connected_against_live_postgres(pg_url: str, migrated_en
 
 def test_get_db_dependency_yields_working_session(pg_url: str, migrated_engine):
     import app.db as app_db
+    from sqlalchemy import text
 
     session_generator = app_db.get_db()
     session = next(session_generator)

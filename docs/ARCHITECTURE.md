@@ -21,6 +21,32 @@ not built yet.
 In production the frontend is a static bundle (`frontend/dist`) served by any
 web server, calling the backend via `VITE_API_BASE_URL`.
 
+## 1b. Document ingestion flow (Step 3)
+
+```markdown
+        Client (Documents page)
+              ↓  multipart/form-data
+   Upload API  POST /api/documents/upload
+              ↓
+   Validation (allowlist → MIME policy → magic bytes/OOXML → size limit)
+              ↓  streamed chunks (never fully buffered)
+   Document Storage (DocumentStorage interface; LocalFileStorage in dev —
+   atomic write, UUID key, swap for S3/Azure/MinIO later)
+              ↓  storage key only
+   documents table (original filename kept as metadata)
+              ↓
+   Future Processing Pipeline (OCR → extraction → validation — later steps)
+```
+
+Service-layer guarantees: rejected uploads never touch disk; if database
+registration fails after storage, the stored file is deleted (no orphans);
+deletion removes the record first, then the file (DB-first, no dangling
+records). `GET .../download` streams the original through the same
+abstraction — storage paths never leave the backend.
+
+**Step 3 stores and registers documents only — OCR/content extraction is NOT
+part of this step.**
+
 ## 2. Backend layering
 
 ```
@@ -35,7 +61,9 @@ app/
 ├── models/        # SQLAlchemy models: documents, document_pages,
 │                  #   extracted_records, validation_results, audit_logs
 ├── alembic/       # schema migrations — the source of truth for the DB schema
-└── utils/         # shared helpers                              (future)
+├── services/      # document_service (upload/list/detail/delete),
+│                  #   document_storage (DocumentStorage interface + LocalFileStorage)
+└── utils/         # file_validation (allowlist, MIME policy, signatures)
 ```
 
 Request flow: `router → service → model/session`, with responses serialised

@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     llm_provider: str = ""
     llm_api_key: str = ""
 
+    # --- Document storage / uploads (Step 3) ---
+    # Local filesystem root for uploaded originals (dev). Swappable for object storage later.
+    document_storage_path: str = "./storage/documents"
+    # Maximum accepted upload size in megabytes.
+    max_upload_size_mb: int = 25
+
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 
@@ -53,6 +59,10 @@ class Settings(BaseSettings):
             f"postgresql://{quote(self.db_user, safe='')}:{quote(self.db_password, safe='')}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
+
+    @property
+    def max_upload_size_bytes(self) -> int:
+        return self.max_upload_size_mb * 1024 * 1024
 
     @property
     def cors_origin_list(self) -> list[str]:

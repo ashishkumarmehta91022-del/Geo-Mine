@@ -27,6 +27,9 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 
+# --- Uploaded documents (never commit user content) ---
+storage/
+
 # --- Logs ---
 *.log
 npm-debug.log*
