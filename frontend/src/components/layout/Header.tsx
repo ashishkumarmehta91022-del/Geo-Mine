@@ -7,7 +7,7 @@ interface HeaderProps {
 
 /** Top navigation bar with page title, connection status and actions. */
 export default function Header({ onMenuClick }: HeaderProps) {
-  const { isLoading, isError, refetch } = useHealth();
+  const { health, isLoading, isError, refetch } = useHealth();
 
   return (
     <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-gray-200 bg-white px-4 lg:px-6">
@@ -45,6 +45,24 @@ export default function Header({ onMenuClick }: HeaderProps) {
           <span className="flex items-center gap-2 text-xs font-medium text-emerald-700">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             API online
+            {health && (
+              <>
+                <span className="mx-1 text-gray-300">·</span>
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    health.database.connected ? "bg-emerald-500" : "bg-amber-500"
+                  }`}
+                  title={
+                    health.database.connected
+                      ? "Database connected"
+                      : `Database ${health.database.detail}`
+                  }
+                />
+                <span className={health.database.connected ? "text-emerald-700" : "text-amber-600"}>
+                  {health.database.connected ? "DB connected" : "DB offline"}
+                </span>
+              </>
+            )}
           </span>
         )}
         <button

@@ -75,8 +75,8 @@ export default function DashboardPage() {
               />
               <StatusCard
                 label="Database"
-                value={health.database === "up" ? "Connected" : "Not connected"}
-                tone={health.database === "up" ? "ok" : "neutral"}
+                value={health.database.connected ? "Connected" : `Offline (${health.database.detail})`}
+                tone={health.database.connected ? "ok" : "neutral"}
               />
               <StatusCard label="Service" value={health.service} tone="neutral" />
             </div>

@@ -32,7 +32,9 @@ app/
 ├── api/routes/    # thin HTTP routers (currently: health)
 ├── schemas/       # Pydantic request/response models
 ├── services/      # business logic — independent of HTTP        (future)
-├── models/        # ORM models                                  (future)
+├── models/        # SQLAlchemy models: documents, document_pages,
+│                  #   extracted_records, validation_results, audit_logs
+├── alembic/       # schema migrations — the source of truth for the DB schema
 └── utils/         # shared helpers                              (future)
 ```
 
@@ -75,7 +77,7 @@ tests) without changing the foundation:
 | OCR                  | Text extraction from scanned documents                       |
 | Data Extraction      | Structure raw text into geological/mining entities           |
 | Validation           | Rule-based checks and anomaly detection on extracted data    |
-| Knowledge Base       | PostgreSQL schema + vector store for structured data         |
+| Knowledge Base       | Vector store on top of the existing PostgreSQL schema        |
 | RAG                  | Retrieval-augmented answering over the knowledge base        |
 | AI Query             | Natural-language Q&A over reports and data                   |
 | Report Generation    | Standardised technical reports from validated data           |

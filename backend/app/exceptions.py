@@ -17,6 +17,14 @@ class AppError(Exception):
     message: str = "An unexpected error occurred."
 
 
+class DatabaseUnavailableError(AppError):
+    """Raised when a PostgreSQL connection cannot be established."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "database_unavailable"
+    message = "Database is unavailable."
+
+
 def _error_payload(code: str, message: str) -> dict:
     return {"error": {"code": code, "message": message}}
 

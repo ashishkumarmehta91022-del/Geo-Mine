@@ -99,21 +99,39 @@ Run tests:
 pytest
 ```
 
-## Database Setup
+## Database Setup (PostgreSQL)
 
-Step 1 establishes the **connection architecture only** — no schema is created
-yet, and the API runs fine without a database.
+**PostgreSQL 14+ is required for database features.** The API itself still
+starts without it — `/api/health` then reports the database as offline.
 
-1. Install PostgreSQL 14+ and create a database:
+1. Install PostgreSQL and create the development database:
    ```sql
    CREATE DATABASE cmpdi_reporting;
    CREATE USER cmpdi_user WITH PASSWORD 'your_password';
    GRANT ALL PRIVILEGES ON DATABASE cmpdi_reporting TO cmpdi_user;
    ```
-2. Put the connection string into `backend/.env` (see *Environment Variables*).
+2. Configure credentials in `backend/.env` (or the root `.env`) — either a
+   single `DATABASE_URL` or the discrete `DB_HOST/DB_PORT/DB_NAME/DB_USER/DB_PASSWORD`
+   variables (see *Environment Variables*). Never commit real credentials.
+3. Apply migrations (the schema's source of truth):
+   ```bash
+   cd backend
+   alembic upgrade head        # creates the 5 foundation tables
+   alembic downgrade base      # undo, if needed
+   ```
+4. Optional DEMO data (generic sample values, clearly labelled — **not** real
+   CMPDI/CIL figures):
+   ```bash
+   python ../scripts/seed_demo_data.py          # from backend/ with venv active
+   python ../scripts/seed_demo_data.py --reset  # remove the DEMO rows
+   ```
+5. Verify: `curl http://localhost:8000/api/health` → `"database": {"connected": true, ...}`
 
-Connections are created lazily by SQLAlchemy, so nothing fails if PostgreSQL
-is not running.
+Integration tests that need a live database run only when you opt in:
+
+```bash
+CMPDI_TEST_DATABASE_URL=postgresql://cmpdi_user:...@localhost:5432/cmpdi_reporting pytest -m db
+```
 
 ## Environment Variables
 
@@ -122,7 +140,9 @@ Copy `.env.example` to `.env` (root and/or `backend/`) and fill in real values.
 
 | Variable        | Used by   | Required to start? | Purpose                                   |
 | --------------- | --------- | ------------------ | ----------------------------------------- |
-| `DATABASE_URL`  | backend   | No (Step 1)        | PostgreSQL connection string              |
+| `DATABASE_URL`  | backend   | No                 | PostgreSQL connection string (wins over `DB_*` when set) |
+| `DB_HOST` / `DB_PORT` | backend | No             | Discrete DB connection variables (used when `DATABASE_URL` empty) |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | backend | No | Discrete DB connection variables                    |
 | `LLM_PROVIDER`  | backend   | No                 | AI provider name (unused until later steps) |
 | `LLM_API_KEY`   | backend   | No                 | AI provider key (unused until later steps) |
 | `ENVIRONMENT`   | backend   | No                 | `development` / `production`              |
@@ -137,7 +157,7 @@ The application **must and does start without any AI credentials**.
 Two terminals:
 
 ```bash
-# Terminal 1 — backend
+# Terminal 1 — backend (first time: apply migrations with `alembic upgrade head`)
 cd backend && uvicorn app.main:app --reload
 
 # Terminal 2 — frontend
@@ -154,12 +174,12 @@ directly at <http://localhost:8000/api/health>.
 
 - ✅ Repository layout: `frontend/`, `backend/`, `data/`, `docs/`, `scripts/`
 - ✅ FastAPI backend with modular structure, `GET /api/health`, CORS, central error handling
-- ✅ Database connection architecture (SQLAlchemy engine, session factory, lazy connections)
+- ✅ PostgreSQL foundation: SQLAlchemy engine + sessions, ORM models for the 5 foundation tables, Alembic migration `0001_initial_schema`, DEMO seed script
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
 - ✅ Reusable UI components + loading / empty / error states
-- ✅ Backend tests for `/api/health`; frontend typecheck + production build
+- ✅ Backend tests (config, health, no-hang guarantee, schema integrity) + opt-in PostgreSQL integration suite; frontend typecheck + production build
 
 **Not yet implemented (later steps):**
 
@@ -167,7 +187,7 @@ directly at <http://localhost:8000/api/health>.
 - ⬜ OCR for scanned reports
 - ⬜ Data extraction and structuring
 - ⬜ Validation engine
-- ⬜ Knowledge base (database schema, vector store)
+- ⬜ Knowledge base (vector store — the base relational schema already exists)
 - ⬜ RAG pipeline
 - ⬜ AI Query (natural-language Q&A)
 - ⬜ Report generation
