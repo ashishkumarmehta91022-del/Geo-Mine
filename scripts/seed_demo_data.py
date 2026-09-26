@@ -116,8 +116,8 @@ def seed() -> None:
         session.add(
             ValidationResult(
                 extracted_record_id=records[0].id,
-                validation_type="range_check",
-                status="passed",
+                rule_code="range_check",  # Step 6: validation_type renamed to rule_code
+                status="pass",
                 message="DEMO value within expected development range.",
                 expected_value="0 .. 100000",
                 actual_value="1234.5678",

@@ -247,6 +247,51 @@ extra model files); scanned pages OCR at ~1–3 s/page on CPU; handwriting and
 very low-quality scans may yield low confidence (flagged, not guessed);
 pages whose scans contain no text honestly report `no_text`.
 
+## Validation & Data Quality Engine (Step 6)
+
+**Deterministic rule-based validation over extracted/OCR data — no LLM, no
+randomness, no automatic corrections.** Given the same data and configuration,
+validation always produces identical results.
+
+**Statuses:** `pass` (satisfies the rule) · `warning` (unusual, not necessarily
+invalid) · `error` (violates a configured rule) · `review_required` (the system
+cannot safely decide — a human must inspect the source). Uncertain data is
+never silently promoted to valid.
+
+**Severity:** `info` · `warning` · `error` · `critical` (only when a rule
+declares it). Ordinary data-quality issues are not inflated.
+
+**Rules (each independently testable, registered in `DEFAULT_RULES`):**
+
+| Rule | Codes | Notes |
+| ---- | ----- | ----- |
+| Required field | `REQUIRED_FIELD_MISSING` | missing values generate results, never defaults |
+| Numeric | `NUMERIC_FORMAT`, `NUMERIC_NEGATIVE`, `NUMERIC_INTEGER_EXPECTED` | parseable/positive/integer checks per field config |
+| Range | `RANGE_OUT_OF_BOUNDS` | configurable min/max, inclusive/exclusive, error-vs-warning |
+| Date | `DATE_INVALID`, `DATE_FUTURE` | documented formats only; future dates when configured |
+| OCR confidence | `OCR_LOW_CONFIDENCE`, `OCR_REVIEW_FLAGGED` | Step 5 `review_required`/confidence → `review_required` |
+| Duplicates | `DUPLICATE_DETECTED` | configured key → WARNING; flagged, never deleted |
+| Cross-document | `CROSS_DOCUMENT_CONFLICT` | same key, different values → both sides preserved, **no winner selected** |
+
+**Data-integrity guarantee:** validation NEVER modifies extracted values. A
+detected `1O5` stays `1O5` — flagged for review, not "corrected" to `105`.
+
+**APIs:** `POST /api/validation/run/{document_id}` · `GET /api/validation/{document_id}`
+· `GET /api/validation/review-queue` (open items with provenance) ·
+`PATCH /api/validation/{id}` (review decision: `open` / `in_review` / `resolved` /
+`rejected` + notes — affects review state only).
+
+**Frontend:** Validation page with summary cards (total / passed / warnings /
+errors / review required), result list (rule, status, severity, source, value,
+expected) and the human review queue — including an explicit **Source A vs
+Source B** display for conflicts.
+
+> ⚠️ **Demonstration rules:** the shipped thresholds/ranges/keys (e.g. the
+> `entity_name + reporting_period` duplicate key and the 0–10,000,000 range)
+> are **demo defaults for development only — not authoritative CMPDI/CIL
+> rules**. Authoritative limits must come from project requirements and be
+> supplied via `ValidationConfig` without code changes.
+
 ## Document Processing Pipeline (Step 4)
 
 **Step 4 does NOT perform OCR, does NOT use AI, and does NOT generate reports.**
@@ -303,6 +348,7 @@ in safe read-only modes.
 - ✅ Document ingestion: upload API with defense-in-depth validation (allowlist, MIME policy, magic bytes/OOXML checks, streaming size limit), swappable storage layer (local FS for dev), list/detail/download/delete APIs, functional Documents page UI
 - ✅ Deterministic processing pipeline: extractor registry (PyMuPDF / python-docx / openpyxl / xlrd / Pillow), typed extraction with provenance + source references, transactional persistence with idempotent re-processing, processing/status/content APIs, Documents page process button + extracted-content viewer
 - ✅ OCR pipeline (RapidOCR/ONNX): scanned-PDF and image OCR with bounding boxes + confidence, per-page native-vs-OCR dispatch for mixed PDFs, low-confidence review flagging, verbatim-text guarantee
+- ✅ Validation & data-quality engine: 7 deterministic rule families, PASS/WARNING/ERROR/REVIEW_REQUIRED model, human review queue with workflow states, cross-document conflict detection (both sides preserved, no auto-winner), original values never modified
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -312,7 +358,7 @@ in safe read-only modes.
 **Not yet implemented (later steps):**
 
 - ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
-- ⬜ Validation engine (uses existing `review_required`/confidence signals as input)
+- ⬜ Reviewer workflow refinements (richer UI, review metrics)
 - ⬜ Validation engine
 - ⬜ Knowledge base (vector store — the base relational schema already exists)
 - ⬜ RAG pipeline

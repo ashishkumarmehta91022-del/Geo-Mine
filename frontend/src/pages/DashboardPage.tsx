@@ -105,7 +105,13 @@ export default function DashboardPage() {
                     <p className="truncate text-xs text-gray-500">{item.description}</p>
                   </div>
                   <span className="shrink-0 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
-                    {item.path === "/dashboard" ? "Live (Step 1)" : "Planned"}
+                    {item.path === "/dashboard"
+                      ? "Live (Step 1)"
+                      : item.path === "/documents"
+                        ? "Live (Steps 3–5)"
+                        : item.path === "/validation"
+                          ? "Live (Step 6)"
+                          : "Planned"}
                   </span>
                 </div>
               ))}

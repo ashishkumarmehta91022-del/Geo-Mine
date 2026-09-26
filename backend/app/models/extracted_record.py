@@ -55,3 +55,5 @@ class ExtractedRecord(TimestampMixin, Base):
     validation_results: Mapped[list["ValidationResult"]] = relationship(  # noqa: F821
         back_populates="extracted_record", cascade="all, delete-orphan"
     )
+    # NOTE: Step 6 made this relationship Optional (record-level checks only).
+    # Page/OCR-level validation results exist without an extracted record.

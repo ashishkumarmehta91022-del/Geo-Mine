@@ -66,6 +66,15 @@ def test_validation_result_references_extracted_record():
     assert any(k.column.table.name == "extracted_records" for k in fk)
 
 
+def test_validation_result_supports_page_level_results():
+    """Step 6: OCR/page-level checks exist without an extracted record."""
+    record_col = ValidationResult.__table__.columns["extracted_record_id"]
+    assert record_col.nullable is True
+    assert "document_id" in ValidationResult.__table__.columns
+    assert "page_id" in ValidationResult.__table__.columns
+    assert {"severity", "review_status", "rule_code", "details"} <= _columns(ValidationResult)
+
+
 def test_audit_log_uses_entity_reference_columns():
     cols = _columns(AuditLog)
     assert {"entity_type", "entity_id", "action", "details", "created_at"} <= cols
@@ -94,7 +103,7 @@ def test_key_indexes_exist():
 
 
 def test_migration_revisions_chain():
-    """The migration chain starts at 0001_initial_schema and is the schema source of truth."""
+    """The migration chain 0001 → 0002 → 0003 is the schema source of truth."""
     import ast
     from pathlib import Path
 
@@ -114,8 +123,9 @@ def test_migration_revisions_chain():
                         down = ast.literal_eval(node.value)
         revisions[rev] = down
 
-    assert "0001_initial_schema" in revisions
     assert revisions["0001_initial_schema"] is None  # single root migration
+    assert revisions["0002_extraction_columns"] == "0001_initial_schema"
+    assert revisions["0003_validation_review"] == "0002_extraction_columns"
 
 
 def test_metadata_matches_initial_migration_ddl():

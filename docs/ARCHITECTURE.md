@@ -102,6 +102,33 @@ OCR text is never auto-corrected — uncertain detections keep their exact
 characters and are flagged for human review. Engine failures isolate to the
 single page (`failed`) instead of poisoning the document.
 
+## 1e. Validation & data-quality layer (Step 6)
+
+```markdown
+   Extracted data (extracted_records) + OCR pages (document_pages)
+         ↓
+   ValueCandidate (verbatim value + provenance, DB-free dataclass)
+         ↓
+   Validation Engine (fixed rule order ⇒ deterministic outcomes)
+   ├─ RequiredFieldRule      REQUIRED_FIELD_MISSING
+   ├─ NumericRule            NUMERIC_FORMAT / _NEGATIVE / _INTEGER_EXPECTED
+   ├─ RangeRule              RANGE_OUT_OF_BOUNDS (config status)
+   ├─ DateRule               DATE_INVALID / DATE_FUTURE
+   ├─ OCRConfidenceRule      OCR_LOW_CONFIDENCE / OCR_REVIEW_FLAGGED (Step 5 input)
+   ├─ DuplicateRule          DUPLICATE_DETECTED (configured key → WARNING)
+   └─ CrossDocumentConsistencyRule  CROSS_DOCUMENT_CONFLICT (both sides kept)
+         ↓
+   ValidationResult rows (rule_code, status, severity, original_value,
+                           expected, details JSONB, review_status)
+         ↓
+   Human Review Queue (open → in_review → resolved | rejected)
+```
+
+Invariants: extracted values are never modified; every result carries
+provenance (document, page, record, source reference); conflicts preserve
+both sources and never pick a winner; runs are idempotent per document
+(results replaced atomically); same input + config ⇒ same results.
+
 ## 2. Backend layering
 
 ```
@@ -123,6 +150,9 @@ app/
 │   ├── ocr/          # OcrEngine interface, OcrResult models, RapidOCR engine,
 │   │                 #   availability service, OCR pipeline helper
 │   └── extractors/   # pymupdf+ocr | python-docx | openpyxl | xlrd | pillow+ocr
+├── validation/    # deterministic rule engine (DB-free): config, rules, parsing
+│   │                 #   — demo rules labeled, authoritative rules via config
+├── services/      # …, validation_service (runs, review queue, PATCH)
 └── utils/         # file_validation (allowlist, MIME policy, signatures)
 ```
 

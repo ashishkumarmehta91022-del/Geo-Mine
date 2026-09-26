@@ -47,3 +47,55 @@ class PageContentType(StrEnum):
     @classmethod
     def values(cls) -> set[str]:
         return {member.value for member in cls}
+
+
+class ValidationStatus(StrEnum):
+    """Deterministic validation outcomes.
+
+    pass            — value satisfies the rule.
+    warning         — value is unusual but not necessarily invalid.
+    error           — value violates a deterministic rule.
+    review_required — the system cannot safely decide; a human must inspect
+                      the source. Uncertain data is never auto-promoted to valid.
+    """
+
+    PASS = "pass"
+    WARNING = "warning"
+    ERROR = "error"
+    REVIEW_REQUIRED = "review_required"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {member.value for member in cls}
+
+
+class ValidationSeverity(StrEnum):
+    """Severity ladder — ordinary data-quality issues must not be inflated.
+
+    info     — notable, no action required.
+    warning  — unusual; worth checking.
+    error    — violates a configured deterministic rule.
+    critical — reserved for rules that explicitly declare it.
+    """
+
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    CRITICAL = "critical"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {member.value for member in cls}
+
+
+class ReviewStatus(StrEnum):
+    """Human review workflow states for validation results."""
+
+    OPEN = "open"
+    IN_REVIEW = "in_review"
+    RESOLVED = "resolved"
+    REJECTED = "rejected"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {member.value for member in cls}
