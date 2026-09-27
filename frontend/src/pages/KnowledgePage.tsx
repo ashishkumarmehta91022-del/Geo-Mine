@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/ui/PageHeader";
 import StateBlock from "@/components/ui/StateBlock";
 import { fetchKnowledgeStats, searchKnowledge } from "@/lib/searchApi";
-import type { KnowledgeStats, SearchResultItem } from "@/types/search";
+import type { KnowledgeStats, RetrievalMode, SearchResponse, SearchResultItem } from "@/types/search";
+
+const RETRIEVAL_MODES: RetrievalMode[] = ["lexical", "semantic", "hybrid"];
 
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none";
@@ -36,7 +38,7 @@ function validationBadge(status: string | null): string {
   }
 }
 
-/** Knowledge / Search page (Step 8) — retrieval with full provenance. */
+/** Knowledge / Search page (Step 8 lexical + Step 9 semantic/hybrid modes). */
 export default function KnowledgePage() {
   const [queryInput, setQueryInput] = useState("");
   const [filters, setFilters] = useState({
@@ -46,7 +48,9 @@ export default function KnowledgePage() {
     extraction_method: "",
     validation_status: "",
   });
-  const [applied, setApplied] = useState({ query: "", filters });
+  const [mode, setMode] = useState<RetrievalMode>("lexical");
+  const [applied, setApplied] = useState({ query: "", filters, mode: "lexical" as RetrievalMode });
+  const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
   const [results, setResults] = useState<SearchResultItem[] | null>(null);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -67,13 +71,19 @@ export default function KnowledgePage() {
   }, []);
 
   const runSearch = useCallback(
-    async (query: string, activeFilters: typeof filters, targetOffset: number) => {
+    async (
+      query: string,
+      activeFilters: typeof filters,
+      targetOffset: number,
+      activeMode: RetrievalMode,
+    ) => {
       setIsLoading(true);
       setIsError(false);
       setError(null);
       try {
         const data = await searchKnowledge({
           q: query || undefined,
+          mode: activeMode === "lexical" ? undefined : activeMode,
           entity: activeFilters.entity || undefined,
           metric: activeFilters.metric || undefined,
           reporting_period: activeFilters.reporting_period || undefined,
@@ -82,10 +92,12 @@ export default function KnowledgePage() {
           limit: PAGE_SIZE,
           offset: targetOffset,
         });
+        setLastResponse(data);
         setResults(data.results);
         setTotal(data.total);
         setOffset(targetOffset);
       } catch (cause: unknown) {
+        setLastResponse(null);
         setIsError(true);
         setError(cause instanceof Error ? cause.message : "Search failed.");
       } finally {
@@ -100,8 +112,21 @@ export default function KnowledgePage() {
   }, [loadStats]);
 
   const submit = () => {
-    setApplied({ query: queryInput, filters });
-    runSearch(queryInput, filters, 0);
+    if (mode !== "lexical" && !queryInput.trim()) {
+      setIsError(true);
+      setError("Semantic and hybrid modes require a text query.");
+      return;
+    }
+    setApplied({ query: queryInput, filters, mode });
+    runSearch(queryInput, filters, 0, mode);
+  };
+
+  const changeMode = (next: RetrievalMode) => {
+    setMode(next);
+    if (results === null) return; // no search yet — mode applies on next submit
+    if (next !== "lexical" && !applied.query.trim()) return; // need a query first
+    setApplied({ query: applied.query, filters: applied.filters, mode: next });
+    runSearch(applied.query, applied.filters, 0, next);
   };
 
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
@@ -119,7 +144,7 @@ export default function KnowledgePage() {
         {statsError ? (
           <p className="text-xs text-gray-400">{statsError}</p>
         ) : stats ? (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             <div className="card p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Documents</p>
               <p className="text-xl font-bold text-gray-900">{stats.documents_indexed}</p>
@@ -142,6 +167,16 @@ export default function KnowledgePage() {
                 {stats.last_index_update ? new Date(stats.last_index_update).toLocaleString() : "—"}
               </p>
             </div>
+            <div
+              className="card p-3"
+              title={stats.embedding_models.length ? `Models: ${stats.embedding_models.join(", ")}` : "No units embedded yet"}
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Embedded</p>
+              <p className="text-xl font-bold text-gray-900">{stats.embedded_units}</p>
+              {stats.embedding_error_units > 0 && (
+                <p className="text-[10px] font-medium text-amber-600">{stats.embedding_error_units} in error</p>
+              )}
+            </div>
           </div>
         ) : (
           <div className="card h-16 animate-pulse bg-gray-50" />
@@ -150,6 +185,27 @@ export default function KnowledgePage() {
 
       {/* Search form */}
       <section aria-label="Search" className="card mb-6 p-4">
+        <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Retrieval mode">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Mode</span>
+          {RETRIEVAL_MODES.map((m) => (
+            <button
+              key={m}
+              type="button"
+              aria-pressed={mode === m}
+              onClick={() => changeMode(m)}
+              className={`rounded-md border px-2.5 py-1 text-xs font-semibold capitalize transition-colors ${
+                mode === m
+                  ? "border-brand-500 bg-brand-50 text-brand-700"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+          {mode !== "lexical" && (
+            <span className="text-[11px] text-gray-400">matches meaning, not just keywords — requires a text query</span>
+          )}
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <input
             className={`${inputClass} flex-1`}
@@ -218,7 +274,7 @@ export default function KnowledgePage() {
             <button
               type="button"
               className="btn-primary"
-              onClick={() => runSearch(applied.query, applied.filters, offset)}
+              onClick={() => runSearch(applied.query, applied.filters, offset, applied.mode)}
             >
               Retry
             </button>
@@ -244,6 +300,15 @@ export default function KnowledgePage() {
           <p className="mb-3 text-sm text-gray-500">
             {total} result{total === 1 ? "" : "s"} · page {currentPage} of {totalPages}
           </p>
+          {lastResponse?.semantic_error && (
+            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Semantic retrieval unavailable — {lastResponse.semantic_error}
+              {lastResponse.mode === "hybrid" ? " Showing lexical results as fallback." : ""}
+            </div>
+          )}
+          {lastResponse?.retrieval_note && (
+            <p className="mb-3 text-[11px] text-gray-400">{lastResponse.retrieval_note}</p>
+          )}
           <div className="space-y-3">
             {results.map((item) => (
               <article key={`${item.unit_type}-${item.validation_id ?? item.record_id ?? item.page_id ?? item.document_id}-${item.title ?? ""}`} className="card p-4">
@@ -264,9 +329,25 @@ export default function KnowledgePage() {
                   {item.extraction_method && (
                     <span className="text-[10px] text-gray-400">via {item.extraction_method.replace("_", " ")}</span>
                   )}
-                  {typeof item.rank_score === "number" && (
-                    <span className="ml-auto text-[10px] text-gray-300" title="Deterministic relevance score — not a trust score">
-                      score {item.rank_score}
+                  {(typeof item.rank_score === "number" ||
+                    typeof item.semantic_similarity === "number" ||
+                    typeof item.relevance === "number") && (
+                    <span className="ml-auto flex gap-3 text-[10px] text-gray-300">
+                      {typeof item.rank_score === "number" && (
+                        <span title="Deterministic lexical relevance score — retrieval metric, not a trust score">
+                          lexical {item.rank_score}
+                        </span>
+                      )}
+                      {typeof item.semantic_similarity === "number" && (
+                        <span title="Cosine similarity — retrieval metric, never truth, correctness or trust">
+                          semantic {item.semantic_similarity.toFixed(3)}
+                        </span>
+                      )}
+                      {typeof item.relevance === "number" && (
+                        <span title="Combined hybrid relevance (explicit weighted formula) — retrieval metric, not a trust score">
+                          relevance {item.relevance.toFixed(3)}
+                        </span>
+                      )}
                     </span>
                   )}
                 </div>
@@ -315,7 +396,7 @@ export default function KnowledgePage() {
                   type="button"
                   className="btn-secondary !px-3 !py-1.5 text-xs"
                   disabled={offset === 0}
-                  onClick={() => runSearch(applied.query, applied.filters, Math.max(0, offset - PAGE_SIZE))}
+                  onClick={() => runSearch(applied.query, applied.filters, Math.max(0, offset - PAGE_SIZE), applied.mode)}
                 >
                   Previous
                 </button>
@@ -323,7 +404,7 @@ export default function KnowledgePage() {
                   type="button"
                   className="btn-secondary !px-3 !py-1.5 text-xs"
                   disabled={offset + PAGE_SIZE >= total}
-                  onClick={() => runSearch(applied.query, applied.filters, offset + PAGE_SIZE)}
+                  onClick={() => runSearch(applied.query, applied.filters, offset + PAGE_SIZE, applied.mode)}
                 >
                   Next
                 </button>

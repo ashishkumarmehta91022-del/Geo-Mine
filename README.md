@@ -247,6 +247,63 @@ extra model files); scanned pages OCR at ~1–3 s/page on CPU; handwriting and
 very low-quality scans may yield low confidence (flagged, not guessed);
 pages whose scans contain no text honestly report `no_text`.
 
+## Semantic Search & Embeddings (Step 9)
+
+Step 9 adds a **semantic retrieval foundation** on top of Step 8's lexical
+search — it does **NOT** generate AI answers, has **no LLM, no RAG, no
+chatbot**, and introduces **no cloud calls and no API keys**. The Step 8
+retrieval layer stays untouched in behavior; semantic retrieval only extends it.
+
+**Embedding provider (pluggable):** `app/embeddings/` defines an
+`EmbeddingProvider` interface (`embed_batch`, `is_available`, name/model/
+dimensions metadata) with a local, offline **fastembed (ONNX)** implementation
+running **BAAI/bge-small-en-v1.5** (384 dimensions, unit-normalized) entirely
+in-process. Providers are swappable without touching search/business logic;
+the provider is injected in tests. Nothing is ever downloaded at request time,
+and **no random or fake vectors are ever produced** — if the model is
+unavailable, rows are marked explicitly `unavailable`/`failed` with the reason.
+
+**Vector storage:** embeddings live on the existing `knowledge_index` rows
+(migration `0006_semantic_embeddings`, fully reversible) as **JSONB float
+arrays** — `embedding`, `embedding_provider`, `embedding_model`,
+`embedding_dimensions`, `embedding_status` (none/pending/embedded/failed/
+unavailable, indexed), `embedding_error`, `embedded_at`. No duplicate source
+tables; provenance columns are reused as-is. PostgreSQL + **pgvector** is an
+optional future optimization — the schema is designed to migrate cleanly when
+it is available (pgvector was **not** installed or runtime-verified in this
+environment).
+
+**What gets embedded:** only useful retrieval units — pages (OCR text stays
+verbatim; confidence is never altered) and structured records whose input is
+contextualized (`entity | metric | value unit | period | validation status` —
+never a bare number like `1200`), plus validation/conflict messages. `value_raw`
+and all source data remain untouched; embeddings are derived, non-authoritative
+additions.
+
+**Search modes:** `GET /api/search?q=...&mode=lexical|semantic|hybrid`.
+Omitted mode = exact Step 8 lexical behavior (backward compatible). Unsupported
+mode → 422; semantic/hybrid without `q` → 422; semantic without a working
+provider → **503 `semantic_unavailable`** (honest, no fake results). Hybrid:
+lexical ∪ semantic candidates (semantic window capped at 100), merged
+deterministically with a **fully explicit formula** —
+`relevance = 0.6 · min-max-normalized lexical + 0.4 · ((1 + cosine) / 2)` —
+with lexical and semantic scores still exposed separately. Scores are
+**retrieval/relevance metrics, never truth/correctness/trust**; the API states
+this in `retrieval_note`. Conflicts keep both sides visible in every mode.
+
+**Lifecycle & safeguards:** processing runs `embed_document` **after** the
+authoritative commit — best-effort, never fails document processing; lexical
+data is always preserved. Reprocessing replaces rows (stale embeddings reset
+to `none`, re-embed is idempotent); deletion cascades. `POST
+/api/search/embed/{document_id}` re-embeds on demand. Guardrails: max input
+4,000 chars, batch ≤ 32, ≤ 500 units/document, per-batch timeout (120 s),
+bounded pagination.
+
+**Frontend:** Knowledge Search gains a **Lexical / Semantic / Hybrid** mode
+selector and score chips explicitly labeled *retrieval metrics, not trust*;
+semantic unavailability is surfaced honestly (with the lexical fallback reason
+in hybrid mode).
+
 ## Knowledge Base & Retrieval (Step 8)
 
 **The Knowledge Base is the retrieval/index layer — it is NOT a source of
@@ -439,6 +496,7 @@ in safe read-only modes.
 - ✅ Validation & data-quality engine: 7 deterministic rule families, PASS/WARNING/ERROR/REVIEW_REQUIRED model, human review queue with workflow states, cross-document conflict detection (both sides preserved, no auto-winner), original values never modified
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
+- ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -450,7 +508,7 @@ in safe read-only modes.
 - ⬜ Document processing (parsing PDF/Excel/DOCX content — upload/storage already done)
 - ⬜ Reviewer workflow refinements (richer UI, review metrics)
 - ⬜ Authoritative field schema (demo structuring config is in place and swappable)
-- ⬜ Knowledge base (vector store — relational retrieval index already exists as of Step 8)
+- ⬜ Vector store optimization (pgvector) — JSONB embeddings on `knowledge_index` already exist as of Step 9
 - ⬜ RAG pipeline
 - ⬜ AI Query (natural-language Q&A)
 - ⬜ Report generation

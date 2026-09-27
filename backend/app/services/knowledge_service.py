@@ -1,24 +1,31 @@
-"""Knowledge service: index lifecycle + deterministic search.
+"""Knowledge service: index lifecycle + deterministic + semantic search.
 
 Index lifecycle (idempotent):
 - index_document: rebuild one document's entries (delete-replace) — call
   after processing/validation so entries reflect current derived data.
+- embed_document: best-effort semantic embedding of entries (Step 9) — never
+  fails processing; failures recorded honestly per row.
 - remove_document: explicit cleanup (CASCADE also covers document deletion).
 - reindex_all: rebuild every document's entries.
 
-Search: SQLAlchemy expression trees only (no string SQL). Ranking uses the
-deterministic scoring in app/knowledge/ranking.py; ties break by
-(unit priority, document_id, id). Every result carries provenance.
+Search: SQLAlchemy expression trees only (no string SQL). Lexical ranking uses
+the deterministic scoring in app/knowledge/ranking.py; semantic mode uses
+cosine similarity over stored provider vectors; hybrid merges both with an
+explicit, documented formula. Every result carries provenance.
 """
 
 import logging
+import math
 from typing import Any
 
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.constants import RetrievalUnitType
+from app.constants import EmbeddingStatus, RetrievalUnitType
+from app.embeddings import default_config as default_embedding_config
+from app.embeddings.inputs import build_embedding_input
+from app.embeddings.service import embedding_available, timed_embed
 from app.exceptions import AppError, DatabaseUnavailableError
 from app.knowledge.query_parser import SearchQuery
 from app.knowledge.ranking import rank_unit
@@ -26,6 +33,11 @@ from app.knowledge.units import units_from_rows
 from app.models import Document, DocumentPage, ExtractedRecord, KnowledgeIndex, ValidationResult
 
 logger = logging.getLogger(__name__)
+
+# Hybrid merge weights — explicit, deterministic, documented in the report.
+HYBRID_LEXICAL_WEIGHT = 0.6
+HYBRID_SEMANTIC_WEIGHT = 0.4
+HYBRID_MAX_SEMANTIC_CANDIDATES = 100
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +198,7 @@ def _text_conditions(query: SearchQuery):
 
 
 def search(db: Session, query: SearchQuery) -> dict[str, Any]:
-    """Deterministic search over the retrieval index.
+    """Deterministic LEXICAL search over the retrieval index (Step 8 contract).
 
     No text and no filters → empty result set (not the whole index).
     Results always carry provenance; ranking is documented arithmetic.
@@ -242,6 +254,247 @@ UNIT_ORDER = {
 
 
 # ---------------------------------------------------------------------------
+# Semantic embeddings (Step 9) — best-effort, honest, never fake
+# ---------------------------------------------------------------------------
+
+
+def embed_document(db: Session, document_id: int) -> dict[str, Any]:
+    """Embed a document's index entries. Best-effort: never raises for
+    provider problems — failures are recorded per-row (embedding_status).
+
+    Returns a factual summary: {embedded, failed, unavailable, skipped, total}.
+    """
+    config = default_embedding_config()
+    summary: dict[str, Any] = {
+        "document_id": document_id,
+        "embedded": 0,
+        "failed": 0,
+        "unavailable": 0,
+        "skipped": 0,
+        "total": 0,
+        "elapsed_seconds": None,
+    }
+    try:
+        rows = db.execute(
+            select(KnowledgeIndex)
+            .where(KnowledgeIndex.document_id == document_id)
+            .order_by(KnowledgeIndex.id)
+        ).scalars().all()
+        # Deterministic order; bounded units per run.
+        targets = [row for row in rows if row.content or row.title][: config.max_units_per_document]
+        summary["total"] = len(rows)
+        summary["skipped"] = len(rows) - len(targets)
+        if not targets:
+            return summary
+
+        # Mark pending so state is visible; single commit per stage.
+        for row in targets:
+            row.embedding_status = EmbeddingStatus.PENDING
+        db.commit()
+
+        inputs = [build_embedding_input(_row_to_draft(row)) for row in targets]
+        result, error, elapsed = timed_embed(inputs, config)
+        summary["elapsed_seconds"] = round(elapsed, 2)
+
+        if result is None:
+            # Honest per-row state: unavailable vs failed.
+            status = (
+                EmbeddingStatus.UNAVAILABLE
+                if error and error.startswith("unavailable")
+                else EmbeddingStatus.FAILED
+            )
+            for row in targets:
+                row.embedding_status = status
+                row.embedding_error = error
+            summary["failed" if status == EmbeddingStatus.FAILED else "unavailable"] = len(targets)
+            db.commit()
+            return summary
+
+        for row, vector in zip(targets, result.vectors, strict=True):
+            row.embedding = vector
+            row.embedding_provider = result.provider
+            row.embedding_model = result.model
+            row.embedding_dimensions = result.dimensions
+            row.embedding_status = EmbeddingStatus.EMBEDDED
+            row.embedding_error = None
+            row.embedded_at = func.now()
+        summary["embedded"] = len(result.vectors)
+        db.commit()
+        return summary
+    except OperationalError as exc:
+        db.rollback()
+        raise DatabaseUnavailableError from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.exception("Embedding persistence failed for document %s", document_id)
+        raise AppError(
+            status_code=500,
+            code="embedding_persistence_failed",
+            message="Embeddings ran but could not be saved.",
+        ) from exc
+
+
+def _row_to_draft(row: KnowledgeIndex):
+    """Rebuild the unit draft shape from a stored index row (for input text)."""
+    from app.knowledge.units import IndexUnitDraft
+
+    return IndexUnitDraft(
+        unit_type=row.unit_type,
+        document_id=row.document_id,
+        page_id=row.page_id,
+        record_id=row.record_id,
+        validation_id=row.validation_id,
+        title=row.title,
+        content=row.content,
+        source_reference=row.source_reference,
+        entity=row.entity,
+        metric=row.metric,
+        unit=row.unit,
+        reporting_period=row.reporting_period,
+        extraction_method=row.extraction_method,
+        validation_status=row.validation_status,
+        ocr_confidence=float(row.ocr_confidence) if row.ocr_confidence is not None else None,
+    )
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Cosine similarity for equal-dimension vectors. Deterministic."""
+    if not a or not b or len(a) != len(b):
+        return 0.0
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
+def _semantic_candidates(
+    db: Session, query: SearchQuery, query_vector: list[float], limit: int
+) -> list[tuple[KnowledgeIndex, float]]:
+    """Top-N semantically similar embedded rows, filters applied.
+
+    Deterministic: brute-force cosine over embedded rows in the filter scope,
+    ties broken by (document_id, id). Bounded candidate window.
+    """
+    base = select(KnowledgeIndex).where(
+        KnowledgeIndex.embedding_status == EmbeddingStatus.EMBEDDED,
+        KnowledgeIndex.embedding.is_not(None),
+    )
+    base = _apply_filters(base, query)
+    rows = db.execute(
+        base.order_by(KnowledgeIndex.document_id, KnowledgeIndex.id)
+        .limit(HYBRID_MAX_SEMANTIC_CANDIDATES)
+    ).scalars().all()
+
+    scored = [
+        (row, _cosine_similarity(query_vector, list(row.embedding)))
+        for row in rows
+    ]
+    scored.sort(key=lambda pair: (-pair[1], pair[0].document_id, pair[0].id))
+    return scored[:limit]
+
+
+def search_semantic(db: Session, query: SearchQuery, query_vector: list[float]) -> dict[str, Any]:
+    """Semantic-only search over embedded entries.
+
+    Scores are cosine similarity in [-1, 1], labeled `semantic_similarity` —
+    a relevance metric, never truth/correctness/trust.
+    """
+    if not query.has_text and not query.has_filters:
+        return {"query": query.text, "total": 0, "results": [], "semantic_available": True}
+    try:
+        pairs = _semantic_candidates(
+            db, query, query_vector, query.offset + query.limit
+        )
+    except OperationalError as exc:
+        raise DatabaseUnavailableError from exc
+    except SQLAlchemyError as exc:
+        raise AppError(status_code=500, code="database_error", message="Semantic search failed.") from exc
+
+    window = pairs[query.offset : query.offset + query.limit]
+    return {
+        "query": query.text,
+        "total": len(pairs),
+        "results": [row for row, _score in window],
+        "scores": {row.id: score for row, score in window},
+        "semantic_available": True,
+    }
+
+
+def search_hybrid(db: Session, query: SearchQuery, query_vector: list[float]) -> dict[str, Any]:
+    """Hybrid search: lexical ∪ semantic, merged deterministically.
+
+    Combined score = HYBRID_LEXICAL_WEIGHT * normalized_lexical
+                   + HYBRID_SEMANTIC_WEIGHT * normalized_semantic
+    where lexical is min-max normalized within the candidate set and semantic
+    is cosine mapped to [0,1] via (1 + cos) / 2. Both raw scores stay exposed;
+    the formula is explicit and deterministic. Provenance and conflicts are
+    untouched — similarity never overrides validation state.
+    """
+    lexical = search(db, query)
+    semantic = search_semantic(db, query, query_vector)
+
+    combined: dict[int, dict[str, Any]] = {}
+    lexical_scores: list[float] = [
+        rank_unit(
+            phrases=query.phrases,
+            keywords=query.keywords,
+            title=row.title,
+            content=row.content,
+            entity=row.entity,
+            metric=row.metric,
+            unit_type=row.unit_type,
+        )
+        for row in lexical["results"]
+    ]
+    # Min-max normalize lexical scores within this result page (deterministic).
+    lo = min(lexical_scores, default=0.0)
+    hi = max(lexical_scores, default=0.0)
+    span = (hi - lo) or 1.0
+
+    for row, lexical_score in zip(lexical["results"], lexical_scores, strict=True):
+        normalized_lexical = (lexical_score - lo) / span
+        combined[row.id] = {
+            "row": row,
+            "lexical": lexical_score,
+            "semantic": None,
+            "combined": HYBRID_LEXICAL_WEIGHT * normalized_lexical,
+        }
+    for row, similarity in semantic.get("scores", {}).items():
+        if row.id in combined:
+            entry = combined[row.id]
+            entry["semantic"] = similarity
+            entry["combined"] += HYBRID_SEMANTIC_WEIGHT * ((1.0 + similarity) / 2.0)
+        else:
+            combined[row.id] = {
+                "row": row,
+                "lexical": None,
+                "semantic": similarity,
+                "combined": HYBRID_SEMANTIC_WEIGHT * ((1.0 + similarity) / 2.0),
+            }
+
+    ordered = sorted(
+        combined.values(),
+        key=lambda entry: (
+            -entry["combined"],
+            UNIT_ORDER.get(entry["row"].unit_type, 0),
+            entry["row"].document_id,
+            entry["row"].id,
+        ),
+    )
+    total = max(lexical["total"], semantic["total"])
+    window = ordered[query.offset : query.offset + query.limit]
+    return {
+        "query": query.text,
+        "total": total,
+        "results": [entry["row"] for entry in window],
+        "scores": {entry["row"].id: entry for entry in window},
+        "semantic_available": semantic["semantic_available"],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Statistics (actual database values only)
 # ---------------------------------------------------------------------------
 
@@ -254,6 +507,21 @@ def index_statistics(db: Session) -> dict[str, Any]:
         ).all()
         documents = db.execute(select(func.count()).select_from(KnowledgeIndex.document_id.distinct())).scalar_one()
         last_update = db.execute(select(func.max(KnowledgeIndex.updated_at))).scalar_one()
+        embedded = db.execute(
+            select(func.count()).select_from(KnowledgeIndex).where(
+                KnowledgeIndex.embedding_status == EmbeddingStatus.EMBEDDED
+            )
+        ).scalar_one()
+        embedding_errors = db.execute(
+            select(func.count()).select_from(KnowledgeIndex).where(
+                KnowledgeIndex.embedding_status.in_([EmbeddingStatus.FAILED, EmbeddingStatus.UNAVAILABLE])
+            )
+        ).scalar_one()
+        embedding_models = db.execute(
+            select(KnowledgeIndex.embedding_model).distinct().where(
+                KnowledgeIndex.embedding_model.is_not(None)
+            )
+        ).scalars().all()
     except OperationalError as exc:
         raise DatabaseUnavailableError from exc
     except SQLAlchemyError as exc:
@@ -263,7 +531,9 @@ def index_statistics(db: Session) -> dict[str, Any]:
 
     counts = {unit_type: int(count) for unit_type, count in by_type}
     return {
-        "documents_indexed": int(documents),
+        "embedded_units": int(embedded),
+        "embedding_error_units": int(embedding_errors),
+        "embedding_models": sorted(model or "unknown" for model in embedding_models),
         "pages_indexed": counts.get(RetrievalUnitType.PAGE, 0),
         "records_indexed": counts.get(RetrievalUnitType.RECORD, 0),
         "validation_results_indexed": counts.get(RetrievalUnitType.VALIDATION, 0),

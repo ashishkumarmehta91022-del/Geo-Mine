@@ -30,8 +30,12 @@ class SearchResultItem(BaseModel):
     reporting_period: str | None = None
     validation_status: str | None = None
     ocr_confidence: float | None = None
-    # Deterministic ranking score (documented arithmetic, not a trust score).
+    # Deterministic lexical score (Step 8 arithmetic — relevance, not trust).
     rank_score: float | None = None
+    # Step 9: cosine similarity in [-1, 1] — a relevance metric, never truth.
+    semantic_similarity: float | None = None
+    # Step 9 hybrid: explicit weighted combination (0.6·lexical_norm + 0.4·semantic_norm).
+    relevance: float | None = None
 
 
 class SearchResponse(BaseModel):
@@ -40,6 +44,12 @@ class SearchResponse(BaseModel):
     limit: int
     offset: int
     results: list[SearchResultItem]
+    # Present for semantic/hybrid modes (or when semantic failed in hybrid).
+    mode: str | None = None
+    semantic_available: bool | None = None
+    semantic_error: str | None = None
+    # Honest labeling of what scores mean (retrieval metrics, not trust).
+    retrieval_note: str | None = None
 
 
 class KnowledgeStatsResponse(BaseModel):
@@ -49,3 +59,7 @@ class KnowledgeStatsResponse(BaseModel):
     validation_results_indexed: int
     total_units: int
     last_index_update: datetime | None
+    # Step 9 facts.
+    embedded_units: int = 0
+    embedding_error_units: int = 0
+    embedding_models: list[str] = []

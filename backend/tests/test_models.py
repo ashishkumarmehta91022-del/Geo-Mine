@@ -129,6 +129,7 @@ def test_migration_revisions_chain():
     assert revisions["0003_validation_review"] == "0002_extraction_columns"
     assert revisions["0004_structured_records"] == "0003_validation_review"
     assert revisions["0005_knowledge_index"] == "0004_structured_records"
+    assert revisions["0006_semantic_embeddings"] == "0005_knowledge_index"
 
 
 def test_metadata_matches_initial_migration_ddl():

@@ -7,10 +7,10 @@ extracted_records / validation_results. Document deletion cascades here
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import TSVECTOR
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -49,6 +49,20 @@ class KnowledgeIndex(Base):
     ocr_confidence: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 4), nullable=True)
     # PostgreSQL-native full-text vector, maintained by the knowledge service.
     search_vector = mapped_column(TSVECTOR, nullable=True)
+
+    # --- Step 9: semantic embeddings (JSONB now; pgvector-ready later) ---
+    # Float array from the configured EmbeddingProvider; NULL until embedded.
+    embedding: Mapped[Optional[list[float]]] = mapped_column(JSONB, nullable=True)
+    embedding_provider: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    embedding_dimensions: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # none | pending | embedded | failed | unavailable (constants.EmbeddingStatus).
+    embedding_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="none", index=True
+    )
+    embedding_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    embedded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

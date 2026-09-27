@@ -1,17 +1,25 @@
-"""Search routes — deterministic retrieval over the knowledge index.
+"""Search routes — lexical (Step 8), semantic and hybrid retrieval (Step 9).
 
-IMPORTANT: /api/search/stats is registered BEFORE /api/search's parameterized
-routes; there is no /{id} collision here, but keeping static paths first is
-the project convention.
+Mode contract:
+- mode omitted / "lexical" → exact Step 8 behavior (backward compatible).
+- "semantic" → cosine similarity over embedded entries (requires text).
+- "hybrid" → lexical ∪ semantic, explicit documented merge.
+
+Scores are retrieval/relevance metrics — never truth, correctness or trust.
 """
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.constants import RetrievalMode
 from app.db import get_db
+from app.exceptions import AppError
+from app.embeddings import default_config as default_embedding_config
+from app.embeddings.service import embedding_available, timed_embed
 from app.knowledge.query_parser import MAX_LIMIT, parse_search_query
 from app.knowledge.ranking import rank_unit
+from app.models import Document, DocumentPage, ExtractedRecord
 from app.schemas.search import KnowledgeStatsResponse, SearchResponse, SearchResultItem
 from app.services import knowledge_service
 
@@ -31,9 +39,19 @@ def _snippet(content: str | None, phrases: tuple[str, ...], keywords: tuple[str,
     return ("…" if start > 0 else "") + content[start : start + length]
 
 
+def _query_vector(text: str) -> tuple[list[float] | None, str | None]:
+    """Embed the query for semantic/hybrid modes. (vector, error)."""
+    config = default_embedding_config()
+    result, error, _elapsed = timed_embed([text], config)
+    if error or result is None or not result.vectors:
+        return None, error or "embedding produced no vector"
+    return result.vectors[0], None
+
+
 @router.get("", response_model=SearchResponse)
 def search_route(
     q: str | None = Query(default=None, max_length=300),
+    mode: str = Query(default=RetrievalMode.LEXICAL, description="lexical | semantic | hybrid"),
     document_id: int | None = Query(default=None, ge=1),
     page: int | None = Query(default=None, ge=1),
     entity: str | None = Query(default=None, max_length=256),
@@ -45,11 +63,18 @@ def search_route(
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ) -> SearchResponse:
-    """Deterministic search over pages, structured records and validation results.
+    """Retrieval over pages, records and validation results.
 
-    Every result carries provenance. Ranking is documented arithmetic — a
-    higher rank never implies factual correctness.
+    Scores (`rank_score`, `semantic_similarity`, `relevance`) are retrieval
+    metrics — never truth/correctness/trust. Conflicts stay visible; no
+    automatic winner is ever selected.
     """
+    if mode not in RetrievalMode.values():
+        raise AppError(
+            status_code=422,
+            code="unsupported_mode",
+            message=f"mode must be one of {sorted(RetrievalMode.values())}.",
+        )
     parsed = parse_search_query(
         q=q,
         document_id=document_id,
@@ -62,36 +87,80 @@ def search_route(
         limit=limit,
         offset=offset,
     )
-    data = knowledge_service.search(db, parsed)
 
-    # Resolve document filenames + page numbers for provenance display.
+    semantic_error: str | None = None
+    if mode in (RetrievalMode.SEMANTIC, RetrievalMode.HYBRID):
+        if not parsed.has_text:
+            raise AppError(
+                status_code=422,
+                code="empty_semantic_query",
+                message=f"mode={mode} requires a text query (q).",
+            )
+        query_vector, embed_error = _query_vector(parsed.text)
+        if query_vector is None:
+            semantic_error = embed_error
+            if mode == RetrievalMode.SEMANTIC:
+                # Honest failure — no fake results.
+                raise AppError(
+                    status_code=503,
+                    code="semantic_unavailable",
+                    message=f"Semantic search is unavailable: {semantic_error}",
+                )
+            # hybrid falls back to lexical with the reason attached.
+
+    if mode == RetrievalMode.SEMANTIC and query_vector is not None:
+        data = knowledge_service.search_semantic(db, parsed, query_vector)
+    elif mode == RetrievalMode.HYBRID and query_vector is not None:
+        data = knowledge_service.search_hybrid(db, parsed, query_vector)
+    else:
+        data = knowledge_service.search(db, parsed)
+
+    return _build_response(db, parsed, data, mode, semantic_error)
+
+
+def _build_response(db: Session, parsed, data: dict, mode: str, semantic_error: str | None) -> SearchResponse:
     rows: list = data["results"]
+    scores: dict = data.get("scores", {}) or {}
+
     document_ids = {row.document_id for row in rows}
     filenames: dict[int, str] = {}
     if document_ids:
-        from app.models import Document
-
         filenames = dict(
             db.execute(select(Document.id, Document.filename).where(Document.id.in_(document_ids))).all()
         )
-    page_numbers = {
-        row.page_id: number
-        for row in rows
-        if row.page_id
-        for number in [_page_number(db, row.page_id)]
-        if number
-    }
 
-    items = []
+    items: list[SearchResultItem] = []
     for row in rows:
         record_meta = _record_metadata(db, row)
+        score_entry = scores.get(row.id) or {}
+        lexical_score = score_entry.get("lexical")
+        semantic_score = score_entry.get("semantic")
+        combined = score_entry.get("combined")
+        rank_score = (
+            round(float(lexical_score), 2)
+            if lexical_score is not None
+            else round(
+                rank_unit(
+                    phrases=parsed.phrases,
+                    keywords=parsed.keywords,
+                    title=row.title,
+                    content=row.content,
+                    entity=row.entity,
+                    metric=row.metric,
+                    unit_type=row.unit_type,
+                ),
+                2,
+            )
+            if mode == RetrievalMode.LEXICAL
+            else None
+        )
         items.append(
             SearchResultItem(
                 unit_type=row.unit_type,
                 document_id=row.document_id,
                 document_name=filenames.get(row.document_id),
                 page_id=row.page_id,
-                page_number=page_numbers.get(row.page_id),
+                page_number=_page_number(db, row.page_id),
                 record_id=row.record_id,
                 validation_id=row.validation_id,
                 source_reference=row.source_reference,
@@ -106,40 +175,41 @@ def search_route(
                 reporting_period=row.reporting_period,
                 validation_status=row.validation_status,
                 ocr_confidence=float(row.ocr_confidence) if row.ocr_confidence is not None else None,
-                rank_score=round(
-                    rank_unit(
-                        phrases=parsed.phrases,
-                        keywords=parsed.keywords,
-                        title=row.title,
-                        content=row.content,
-                        entity=row.entity,
-                        metric=row.metric,
-                        unit_type=row.unit_type,
-                    ),
-                    2,
-                ),
+                rank_score=rank_score,
+                semantic_similarity=round(float(semantic_score), 4) if semantic_score is not None else None,
+                relevance=round(float(combined), 4) if combined is not None else None,
             )
         )
-    return SearchResponse(
+
+    response = SearchResponse(
         query=data["query"],
         total=data["total"],
         limit=parsed.limit,
         offset=parsed.offset,
         results=items,
     )
+    if mode != RetrievalMode.LEXICAL or semantic_error:
+        response.mode = mode
+        response.semantic_available = data.get("semantic_available", embedding_available())
+        response.semantic_error = semantic_error
+        response.retrieval_note = (
+            "Scores are retrieval/relevance metrics (rank_score=lexical arithmetic, "
+            "semantic_similarity=cosine, relevance=weighted hybrid) — NOT truth, "
+            "correctness or trust. Conflicts remain visible; no winner is selected."
+        )
+    return response
 
 
-def _page_number(db: Session, page_id: int) -> int | None:
-    from app.models import DocumentPage
-
-    return db.get(DocumentPage, page_id).page_number if db.get(DocumentPage, page_id) else None
+def _page_number(db: Session, page_id: int | None) -> int | None:
+    if page_id is None:
+        return None
+    page = db.get(DocumentPage, page_id)
+    return page.page_number if page else None
 
 
 def _record_metadata(db: Session, row) -> dict[str, str | None]:
     if row.unit_type != "record" or row.record_id is None:
         return {}
-    from app.models import ExtractedRecord
-
     record = db.get(ExtractedRecord, row.record_id)
     if record is None:
         return {}
@@ -154,3 +224,14 @@ def _record_metadata(db: Session, row) -> dict[str, str | None]:
 def search_stats_route(db: Session = Depends(get_db)) -> KnowledgeStatsResponse:
     """Factual index statistics from actual database values."""
     return KnowledgeStatsResponse(**knowledge_service.index_statistics(db))
+
+
+@router.post("/embed/{document_id}")
+def embed_document_route(document_id: int, db: Session = Depends(get_db)) -> dict:
+    """Best-effort semantic embedding of a document's index entries.
+
+    Never fails because embeddings are unavailable (e.g. offline environment):
+    returns a factual summary with per-row status recorded in the index.
+    Idempotent — re-running replaces embeddings for the same entries.
+    """
+    return knowledge_service.embed_document(db, document_id)

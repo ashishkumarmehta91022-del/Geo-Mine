@@ -58,6 +58,13 @@ class Settings(BaseSettings):
     # Render zoom for scanned PDF pages before OCR (~2.0 ≈ 144 dpi).
     pdf_ocr_zoom: float = 2.0
 
+    # --- Semantic embeddings (Step 9) ---
+    # Bounded safeguards for the local embedding pipeline (see embeddings/config.py).
+    embedding_max_input_chars: int = 4000
+    embedding_max_batch_size: int = 32
+    embedding_max_units_per_document: int = 500
+    embedding_timeout_seconds: float = 120.0
+
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"
 

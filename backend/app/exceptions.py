@@ -10,11 +10,27 @@ logger = logging.getLogger(__name__)
 
 
 class AppError(Exception):
-    """Base class for expected application errors."""
+    """Base class for expected application errors.
+
+    Subclasses may define class-level defaults (status_code/code/message) or
+    override any of them per-instance with keyword arguments:
+        raise AppError(status_code=422, code="unsupported_mode", message="...")
+    Positional args are forwarded to Exception (e.g. NotFoundError("x"));
+    the payload still comes from the class-level `message`.
+    """
 
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR
     code: str = "internal_error"
     message: str = "An unexpected error occurred."
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args)
+        if "status_code" in kwargs:
+            self.status_code = int(kwargs["status_code"])  # type: ignore[arg-type]
+        if "code" in kwargs:
+            self.code = str(kwargs["code"])  # type: ignore[arg-type]
+        if "message" in kwargs:
+            self.message = str(kwargs["message"])  # type: ignore[arg-type]
 
 
 class DatabaseUnavailableError(AppError):

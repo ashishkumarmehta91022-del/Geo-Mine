@@ -26,6 +26,7 @@ class IndexUnitDraft:
     source_reference: str | None = None
     entity: str | None = None
     metric: str | None = None
+    unit: str | None = None  # record unit of measure (context for embeddings)
     reporting_period: str | None = None
     extraction_method: str | None = None
     validation_status: str | None = None
@@ -79,6 +80,7 @@ def record_unit(record: ExtractedRecord, document_filename: str | None) -> Index
         source_reference=record.source_reference,
         entity=record.entity_name,
         metric=record.metric_name,
+        unit=record.unit,
         reporting_period=record.reporting_period,
         extraction_method=record.extraction_method,
         validation_status=record.validation_status,

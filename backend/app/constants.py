@@ -111,3 +111,36 @@ class RetrievalUnitType(StrEnum):
     @classmethod
     def values(cls) -> set[str]:
         return {member.value for member in cls}
+
+
+class EmbeddingStatus(StrEnum):
+    """Semantic embedding lifecycle per knowledge_index row (Step 9).
+
+    none        — not yet attempted (lexical-only entry).
+    pending     — queued for embedding.
+    embedded    — vector stored with provider/model metadata.
+    failed      — the provider errored; reason preserved in embedding_error.
+    unavailable — no usable provider in this environment (honest state).
+    """
+
+    NONE = "none"
+    PENDING = "pending"
+    EMBEDDED = "embedded"
+    FAILED = "failed"
+    UNAVAILABLE = "unavailable"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {member.value for member in cls}
+
+
+class RetrievalMode(StrEnum):
+    """Search mode: lexical (Step 8 default) | semantic | hybrid (Step 9)."""
+
+    LEXICAL = "lexical"
+    SEMANTIC = "semantic"
+    HYBRID = "hybrid"
+
+    @classmethod
+    def values(cls) -> set[str]:
+        return {member.value for member in cls}

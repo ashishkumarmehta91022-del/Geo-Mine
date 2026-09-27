@@ -178,6 +178,63 @@ document/page/record/source-reference provenance; conflicting values remain
 searchable with both sides visible; reprocessing and deletion leave zero stale
 or orphaned entries.
 
+## 1h. Semantic search & embedding layer (Step 9)
+
+```markdown
+   SOURCE OF TRUTH (authoritative — unchanged)
+   documents · document_pages · extracted_records · validation_results
+         ↓  (Step 8: index_document — delete-replace, idempotent)
+   knowledge_index  (tsvector + GIN, provenance columns)
+         ↓  (Step 9: embed_document — best-effort, strictly AFTER the
+              authoritative processing commit; per-row embedding_status:
+              none → pending → embedded | failed | unavailable)
+   knowledge_index.embedding  (JSONB float array — BAAI/bge-small-en-v1.5,
+   384 dims, unit-normalized; provider/model/dimensions stored per row)
+         ↓  (GET /api/search?mode=lexical|semantic|hybrid)
+   combined retrieval candidates:
+     lexical  — Step 8 arithmetic ranking (unchanged)
+     semantic — brute cosine similarity over EMBEDDED rows, window ≤ 100
+     hybrid   — relevance = 0.6 · min-max(lexical) + 0.4 · ((1+cos)/2)
+                (explicit, deterministic; raw scores stay exposed)
+```
+
+**Embedding provider abstraction** (`app/embeddings/`): `EmbeddingProvider`
+interface (`embed_batch`, `is_available`, name/model/dimensions metadata) with
+an offline **fastembed (ONNX)** implementation — no cloud, no API keys, no
+downloads at request time. Providers are swapped via `set_embedding_provider`
+(tests inject deterministic fakes) without touching search/business logic.
+Embedding inputs are deterministic and contextualized (records embed as
+`entity | metric | value unit | period | validation status`; pages embed their
+verbatim text with OCR confidence preserved separately; validation rows embed
+their conflict message). `value_raw` and all source data are never modified.
+
+**Failure behavior is honest by construction:** unavailable provider ⇒ rows
+marked `unavailable` with the reason (semantic mode returns **503**,
+hybrid falls back to lexical with `semantic_error` attached); provider errors
+and timeouts ⇒ `failed`. **No random or fake vectors are ever produced**, and
+processing never fails because embeddings are unavailable — lexical data is
+always preserved first.
+
+**Provenance invariants (unchanged from Step 8, extended):** every semantic
+result keeps document/page/record/validation/source-reference, extraction
+method, validation status and OCR confidence; `semantic_similarity` and
+`relevance` are labeled retrieval/relevance metrics — never truth, correctness
+or trust — and the API says so explicitly (`retrieval_note`). Conflicting
+records both remain visible in every mode; similarity never overrides
+validation state.
+
+**Performance safeguards:** input ≤ 4,000 chars, batch ≤ 32, ≤ 500 units per
+document, per-batch wall-clock timeout (120 s), semantic candidate window ≤
+100, bounded pagination (limit ≤ 100). **Vector storage** is JSONB on
+`knowledge_index` (migration `0006`, reversible); **pgvector** is an optional
+future optimization — PostgreSQL is not installed in the current environment,
+so migration `0006` was validated statically (offline SQL generation) and the
+PostgreSQL-required integration tests skip honestly.
+
+**Step 9 does NOT generate AI answers** — no RAG, no LLM, no chatbot. The
+combined candidate list is the input the future answer layer will consume
+*with* provenance.
+
 ## 2. Backend layering
 
 ```

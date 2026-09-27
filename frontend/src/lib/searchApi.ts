@@ -1,12 +1,13 @@
 import { apiBaseUrl } from "@/lib/env";
 import { ApiError } from "@/lib/api";
-import type { KnowledgeStats, SearchResponse } from "@/types/search";
+import type { KnowledgeStats, RetrievalMode, SearchResponse } from "@/types/search";
 
-/** Search client for the knowledge index (Step 8). */
+/** Search client for the knowledge index (Step 8 lexical, Step 9 modes). */
 
 export async function searchKnowledge(
   params: {
     q?: string;
+    mode?: RetrievalMode;
     document_id?: number;
     page?: number;
     entity?: string;

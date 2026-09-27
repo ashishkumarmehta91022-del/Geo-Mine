@@ -346,5 +346,6 @@ def test_search_statistics_reflect_actual_data(client, migrated_engine):
     assert set(stats) == {
         "documents_indexed", "pages_indexed", "records_indexed",
         "validation_results_indexed", "total_units", "last_index_update",
+        "embedded_units", "embedding_error_units", "embedding_models",
     }
     assert isinstance(stats["total_units"], int)

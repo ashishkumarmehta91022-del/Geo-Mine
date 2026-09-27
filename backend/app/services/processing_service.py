@@ -121,6 +121,17 @@ def process_document(db: Session, document_id: int, storage: DocumentStorage) ->
         raise ProcessingFailedError(message=f"Structuring failed: {exc}") from exc
 
     _persist_derived_data(db, document, extraction, drafts, extractor)
+
+    # Step 9: semantic embeddings — strictly AFTER the authoritative commit.
+    # Best-effort: never fails processing; per-row status is recorded in
+    # knowledge_index (unavailable/failed reasons exposed via search stats).
+    try:
+        from app.services import knowledge_service
+
+        knowledge_service.embed_document(db, document.id)
+    except Exception:  # noqa: BLE001 — embeddings are auxiliary, never authoritative
+        db.rollback()
+        logger.exception("Semantic embedding failed (non-fatal) for document %s", document.id)
     return document
 
 
