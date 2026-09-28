@@ -235,6 +235,39 @@ PostgreSQL-required integration tests skip honestly.
 combined candidate list is the input the future answer layer will consume
 *with* provenance.
 
+## 1i. AI query layer (Step 10)
+
+```
+   question (≤ 500 chars, untrusted)
+         ↓  app/ai/service.py — run_ai_query (fixed order)
+   1. validation                → 422 empty/too_long; semantic-only mode → 422
+   2. retrieval-first           → knowledge_service (hybrid default;
+   │                              LLM never searches anything)
+   3. bounded evidence          → app/ai/evidence.py (≤ 12 units, ≤ 8,000 chars,
+   │                              full provenance, evidence_id = list position)
+   4. deterministic conflicts   → group by (entity, metric, period); BOTH
+   │                              sides stay; no winner, ever
+   5. structured prompt         → app/llm/prompts.py (code-owned system rules;
+   │                              untrusted content only in delimited user blocks,
+   │                              delimiter-neutralized)
+   6. one bounded completion    → app/llm/service.py (pluggable provider,
+   │                              thread-pool timeout, secret-free errors)
+   7. strict JSON contract      → parse_llm_response (exact key set, types;
+   │                              citations filtered to real evidence ids)
+         ↓
+   AIQueryResponse (answer + evidence + conflicts + honest status)
+```
+
+**Honesty guarantees:** no evidence ⇒ `insufficient_evidence` (LLM never
+invoked); no provider/failed provider ⇒ `llm_unavailable` / `llm_error`
+(HTTP 503 for unavailability) with the evidence still returned; malformed
+responses ⇒ `llm_error` with the reason — **never a fabricated answer**.
+Application-level conflict detection always ORs over the model's self-report.
+**Security:** API keys stay in configuration (never logged, never returned);
+evidence text cannot elevate itself to instructions (delimiters are
+neutralized inside untrusted content); audit rows (`ai.query`) carry metadata
+only. The mock provider output is permanently labeled `[MOCK LLM]`.
+
 ## 2. Backend layering
 
 ```

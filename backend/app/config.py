@@ -37,9 +37,15 @@ class Settings(BaseSettings):
     db_user: str = "cmpdi_user"
     db_password: str = ""  # comes from the environment only; never hard-coded
 
-    # --- AI / LLM (unused until later steps; not required to start) ---
+    # --- AI / LLM (Step 10: AI Query; optional — everything works without it) ---
+    # Empty provider name ⇒ LLM unavailable ⇒ /api/ai/query answers 503
+    # llm_unavailable. Never fabricate answers; keys come from the env only.
     llm_provider: str = ""
     llm_api_key: str = ""
+    llm_model: str = ""
+    # OpenAI-compatible base URL (e.g. a local server or a cloud endpoint).
+    llm_base_url: str = ""
+    llm_timeout_seconds: float = 60.0
 
     # --- Document storage / uploads (Step 3) ---
     # Local filesystem root for uploaded originals (dev). Swappable for object storage later.

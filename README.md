@@ -304,6 +304,18 @@ selector and score chips explicitly labeled *retrieval metrics, not trust*;
 semantic unavailability is surfaced honestly (with the lexical fallback reason
 in hybrid mode).
 
+## AI Query — Retrieval-Grounded Q&A (Step 10)
+
+Step 10 adds the first AI answer layer: `POST /api/ai/query` answers natural-language questions **only** from evidence retrieved out of the Step 8/9 knowledge index. The LLM never searches the database, never answers without evidence, and never resolves conflicts.
+
+**Pluggable LLM provider (`app/llm/`):** `LLMProvider` interface with an OpenAI-compatible HTTP implementation (urllib, bearer key from the environment only — never logged, errors sanitized) and a clearly-labeled deterministic `[MOCK LLM]` provider for tests/demos. Configured via `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_TIMEOUT_SECONDS` (see `.env.example`). No provider configured ⇒ honest `503 llm_unavailable`; the platform runs fully without one.
+
+**Grounding pipeline (`app/ai/`):** question validation (≤ 500 chars) → retrieval-first (hybrid default; semantic-only mode rejected for AI queries) → bounded evidence (≤ 12 units, ≤ 8,000 chars) with full provenance (document/page/record ids, source reference, extraction method, validation status, OCR confidence) → strict structured prompt (fixed code-owned system rules; untrusted question/evidence confined to delimited user-message blocks with delimiter-neutralization, so prompt injection cannot forge block boundaries) → one bounded completion → strict JSON response contract (`answer`/`evidence_ids`/`conflict_detected`/`insufficient_evidence`/`limitations`) with invalid citations dropped.
+
+**Conflicts:** deterministic application-level detection (same entity/metric/period, different raw values) always surfaces — the model can never hide conflicts and never picks a winner. No evidence ⇒ `insufficient_evidence` with the LLM never invoked. Audit logging (`ai.query`) stores metadata only (status, mode, evidence count, provider/model, latency).
+
+**Prototype/demo notice:** Step 10 is an evaluation foundation, not an official reporting authority — every answer carries grounding/verification caveats and cites its evidence ids.
+
 ## Knowledge Base & Retrieval (Step 8)
 
 **The Knowledge Base is the retrieval/index layer — it is NOT a source of
@@ -497,6 +509,7 @@ in safe read-only modes.
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
+- ✅ AI query foundation (Step 10): retrieval-grounded Q&A `POST /api/ai/query` — pluggable LLM provider (OpenAI-compatible / labeled mock), bounded provenance-complete evidence, strict JSON contract, deterministic conflict surfacing, honest insufficient-evidence/unavailable states, prompt-injection resistance, metadata-only audit
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
 - ✅ Sidebar navigation for all 10 modules (Dashboard implemented; others placeholders)
@@ -509,8 +522,7 @@ in safe read-only modes.
 - ⬜ Reviewer workflow refinements (richer UI, review metrics)
 - ⬜ Authoritative field schema (demo structuring config is in place and swappable)
 - ⬜ Vector store optimization (pgvector) — JSONB embeddings on `knowledge_index` already exist as of Step 9
-- ⬜ RAG pipeline
-- ⬜ AI Query (natural-language Q&A)
+- ⬜ Richer RAG (conversation memory, re-ranking, page-level chunking) — retrieval-grounded Q&A already exists as of Step 10
 - ⬜ Report generation
 - ⬜ Topic Intelligence (word clouds, topic modelling)
 - ⬜ Authentication / RBAC

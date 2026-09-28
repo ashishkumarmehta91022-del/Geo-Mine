@@ -12,7 +12,7 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import documents, health, processing, records, search, validation
+from app.api.routes import ai_query, documents, health, processing, records, search, validation
 from app.config import settings
 from app.db import probe_database
 from app.exceptions import register_exception_handlers
@@ -62,3 +62,4 @@ app.include_router(processing.router)
 app.include_router(validation.router)
 app.include_router(records.router)
 app.include_router(search.router)
+app.include_router(ai_query.router)
