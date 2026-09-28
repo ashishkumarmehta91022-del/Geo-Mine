@@ -330,6 +330,30 @@ payload only), descriptive-only system rules, strict JSON contract
 deterministic template fallback — generation never fails because the LLM is
 absent; AI output is always labeled and never authoritative.
 
+## 1l. Document & topic intelligence layer (Step 13)
+
+```
+   knowledge_index (Step 8 — existing, authoritative extraction content)
+         ↓  app/intelligence/corpus.py — bounded corpus (documented limits,
+   │     truncation flagged; provenance per unit; display forms preserved)
+         ↓  text.py → keywords.py → topics.py → wordcloud.py
+   TF-IDF keywords + content-only 2–3-gram phrases (explained scores)
+   co-occurrence topics (labels derived from terms — never fabricated)
+   word-cloud DATA (0..1 weights; frontend renders, no backend images)
+   topic ↔ document matches (score + supporting terms + sources)
+         ↓  summary.py (deterministic; optional AI prose via Step 10 provider)
+   DocumentSummary: metadata, counts, key terms, top topics, key metrics
+         ↓  /api/intelligence/*  (+ Topic Intelligence page, /knowledge?q= deep-links)
+```
+
+**Integrity rules:** derived intelligence is rebuildable, never a second
+source of truth; bare numbers excluded from keywords/topics; document text
+is untrusted (delimiters neutralized in AI contexts); corpus bounds are
+documented and enforced; audit rows carry counts only. The AI prose summary
+is opt-in, strictly grounded (closed evidence context, strict JSON
+contract), labeled AI-GENERATED — VERIFY, and never blocks the
+authoritative deterministic summary.
+
 ## 2. Backend layering
 
 ```

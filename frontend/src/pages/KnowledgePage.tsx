@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import PageHeader from "@/components/ui/PageHeader";
 import StateBlock from "@/components/ui/StateBlock";
 import { fetchKnowledgeStats, searchKnowledge } from "@/lib/searchApi";
@@ -59,6 +60,7 @@ export default function KnowledgePage() {
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<KnowledgeStats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
   const PAGE_SIZE = 20;
 
   const loadStats = useCallback(async () => {
@@ -110,6 +112,17 @@ export default function KnowledgePage() {
   useEffect(() => {
     loadStats();
   }, [loadStats]);
+
+  // Step 13 search integration: /knowledge?q=<topic-term> deep-link from
+  // the Topic Intelligence page — reuses the EXISTING search layer.
+  const deepLinkQuery = searchParams.get("q") ?? "";
+  useEffect(() => {
+    if (!deepLinkQuery.trim()) return;
+    setQueryInput(deepLinkQuery);
+    setApplied({ query: deepLinkQuery, filters, mode });
+    runSearch(deepLinkQuery, filters, 0, mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkQuery]);
 
   const submit = () => {
     if (mode !== "lexical" && !queryInput.trim()) {

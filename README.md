@@ -304,6 +304,16 @@ selector and score chips explicitly labeled *retrieval metrics, not trust*;
 semantic unavailability is surfaced honestly (with the lexical fallback reason
 in hybrid mode).
 
+## Document & Topic Intelligence (Step 13)
+
+Step 13 adds deterministic document/topic intelligence derived from the EXISTING knowledge index — no new source of truth, no re-reading of binary files, no topic-modeling framework. Everything is rebuildable and every term traces back to document/page/source references.
+
+**`app/intelligence/`** builds a bounded corpus from indexed content (documented limits: ≤ 50 documents, ≤ 120 units/document, ≤ 4,000 chars/unit, ≤ 600 units / 240k chars per corpus; truncation is flagged, never silent), then: **keywords & phrases** — safe tokenization, configurable stopwords, bare numbers excluded, content-only 2–3-gram phrases, deterministic TF-IDF ranking with an explained `score_reason` ("frequency N × smoothed idf(D of T docs)"); **topics** — co-occurrence clustering of ranked terms (Jaccard unit overlap ≥ 0.3), labels derived from the underlying terms ("Production / Output") and explicitly NOT official CMPDI/CIL topic definitions; **word-cloud DATA** (normalized 0..1 weights, frontend renders — no backend images); **topic ↔ document relationships** with scores, supporting terms and sources; **deterministic document summaries** (metadata, page/record counts, validation/review counts, key terms, top topics, key metrics via the Step 11 data engine).
+
+**APIs:** `GET /api/intelligence/documents/{id}` (+ `/keywords`, `/topics`, `/word-cloud`), `POST /api/intelligence/corpus/analyze`, `POST /api/intelligence/documents/{id}/summarize`. Honest errors: 404 `document_not_found` / `no_indexed_content`, 503 `database_unavailable`. The **optional AI prose summary** (`include_ai_summary`) uses the Step 10 provider with a closed, delimiter-neutralized evidence context and strict JSON contract — states `ok` (labeled AI-GENERATED — VERIFY) / `unavailable` / `failed` / `insufficient_evidence`; the deterministic summary is always present and authoritative.
+
+**Frontend:** the Topic Intelligence page (scope selector, summary panel, word cloud, topic cards, relationships, keyword table) with one-click "search this term" deep-links into the EXISTING Knowledge Search (`/knowledge?q=…`) — no second search engine. Audit rows (`intelligence.analyze`, `intelligence.summarize`) carry counts only.
+
 ## Report Intelligence & Visualization (Step 12)
 
 Step 12 extends the Step 11 report foundation with a deterministic analytical layer — KPIs, trends, comparisons, distributions, insights and frontend-friendly **chart DATA specifications** — plus an optional, strictly-grounded AI narrative. The deterministic engine remains authoritative; nothing replaces Step 11 and no new source of truth is introduced.
@@ -531,6 +541,7 @@ in safe read-only modes.
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
+- ✅ Document & topic intelligence foundation (Step 13): bounded knowledge-index corpus, deterministic TF-IDF keywords/phrases, co-occurrence topics with derived labels, word-cloud data, topic↔document relationships, deterministic summaries + optional labeled AI summary, intelligence APIs and Topic Intelligence page with search deep-links
 - ✅ Report intelligence & visualization foundation (Step 12): deterministic KPI/trend/comparison/distribution engines with conflict-aware exclusions, descriptive-only insights, frontend-friendly chart DATA specs, Report Generator page (KPI cards, SVG charts, conflict indicators), optional labeled AI narrative with deterministic fallback, `POST /api/reports/analyze`
 - ✅ Automated report generation foundation (Step 11): deterministic provenance-grounded DOCX via `POST /api/reports/generate` — typed bounded specification, read-only data engine over structured records, conflict groups with both sides preserved (REVIEW REQUIRED, no winner), explicit missing-data markers, deterministic sections + byte-stable artifact, metadata-only audit; no LLM, no fabrication
 - ✅ AI query foundation (Step 10): retrieval-grounded Q&A `POST /api/ai/query` — pluggable LLM provider (OpenAI-compatible / labeled mock), bounded provenance-complete evidence, strict JSON contract, deterministic conflict surfacing, honest insufficient-evidence/unavailable states, prompt-injection resistance, metadata-only audit
@@ -549,7 +560,7 @@ in safe read-only modes.
 - ⬜ Richer RAG (conversation memory, re-ranking, page-level chunking) — retrieval-grounded Q&A already exists as of Step 10
 - ⬜ Report artifact persistence + download history — in-memory DOCX generation already exists as of Step 11
 - ⬜ DOCX-embedded chart images and CMPDI/CIL template pack — chart DATA specs + frontend SVG visualization exist as of Step 12
-- ⬜ Topic Intelligence (word clouds, topic modelling)
+- ⬜ Topic modelling upgrades (LDA-style, embedding-based clustering) — deterministic keyword/phrase/topic foundation exists as of Step 13
 - ⬜ Authentication / RBAC
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture.

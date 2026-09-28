@@ -7,6 +7,7 @@ import DocumentsPage from "@/pages/DocumentsPage";
 import KnowledgePage from "@/pages/KnowledgePage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import ReportGeneratorPage from "@/pages/ReportGeneratorPage";
+import TopicIntelligencePage from "@/pages/TopicIntelligencePage";
 import ValidationPage from "@/pages/ValidationPage";
 
 export default function App() {
@@ -23,9 +24,11 @@ export default function App() {
         <Route path="/validation" element={<ValidationPage />} />
         {/* Live page (Step 12) */}
         <Route path="/report-generator" element={<ReportGeneratorPage />} />
+        {/* Live page (Step 13) */}
+        <Route path="/topic-intelligence" element={<TopicIntelligencePage />} />
         {/* Placeholder pages for modules implemented in later steps */}
         {NAV_ITEMS.filter(
-          (item) => !["/dashboard", "/documents", "/data-explorer", "/knowledge", "/validation", "/report-generator"].includes(item.path),
+          (item) => !["/dashboard", "/documents", "/data-explorer", "/knowledge", "/validation", "/report-generator", "/topic-intelligence"].includes(item.path),
         ).map((item) => (
           <Route key={item.path} path={item.path} element={<PlaceholderPage />} />
         ))}
