@@ -419,6 +419,44 @@ and every deterministic feature works with `LLM_PROVIDER` empty.
 **Docker configuration is statically validated only (Docker unavailable in
 the development environment) — runtime deployment is not claimed.**
 
+## 1p. Production deployment validation & SIH demo environment (Step 17)
+
+**Verification vocabulary (applies to every claim):** RUNTIME VERIFIED =
+executed here; STATICALLY VERIFIED = enforced by
+`backend/tests/test_deployment_static.py` (20 DB-free tests) reusing the Step
+16 readiness checks; NOT AVAILABLE IN CURRENT ENVIRONMENT = documented
+commands, no fabricated results.
+
+```
+Runtime availability matrix (Phase 2):
+  Python 3.14 venv / Node 24 / npm ........ RUNTIME VERIFIED — AVAILABLE
+  FastEmbed BAAI/bge-small-en-v1.5 (384d) . RUNTIME VERIFIED — cached,
+                                            offline-capable (EMBED_OK 1.06 s)
+  Docker / Compose / psql / pg_isready .... NOT AVAILABLE IN CURRENT ENVIRONMENT
+```
+
+**Static validation results:** backend image (slim base, constraint-pinned
+install, code-only COPY — storage/venv/caches excluded via `.dockerignore`,
+non-root `appuser`, `alembic upgrade head` before uvicorn, no secrets or
+`.env` in any instruction); frontend two-stage lockfile build → nginx with
+SPA fallback + same-origin `/api` proxy (30 MB upload ceiling, no
+interpolation); compose topology — backend gated on a healthy postgres,
+persistent named volumes (`postgres_data`, `uploads`), minimal port surface
+(5432/8000/80; postgres exposed only for local dev), no Redis/queues, secrets
+via interpolation only; frontend bundle references only `VITE_API_BASE_URL`
+(same-origin default, no secrets); demo seed inserts `DEMO_`-labelled data
+with `source="demo_seed"` and `--reset` deletes only the demo document.
+Image builds and container startup remain **NOT VERIFIED** (Docker absent).
+
+**Runtime-verified honesty (DB-free):** `/api/health` returns HTTP 200 with
+`connected:false` under a database outage; `/api/dashboard/statuses` maps
+database→`UNAVAILABLE`, retrieval/embeddings degrade with it, LLM reports
+`NOT CONFIGURED` — never a fabricated healthy state or fake zeroes.
+
+**Demo:** [`docs/SIH_DEMO_RUNBOOK.md`](SIH_DEMO_RUNBOOK.md) — setup, seed,
+10-screen demo flow, USP talking points, failure recovery. Seed execution
+and the seeded E2E walkthrough are **NOT VERIFIED** without PostgreSQL.
+
 ## 2. Backend layering
 
 ```

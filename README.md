@@ -120,6 +120,46 @@ interpolation); nothing is baked into images. The `.dockerignore` keeps
 `.env`, `.git`, venvs, `node_modules` and uploaded storage out of build
 contexts.
 
+## Production Deployment Validation & SIH Demo Environment (Step 17)
+
+Step 17 validates the Step 16 deployment configuration and packages the SIH
+demo, using an explicit verification vocabulary applied everywhere
+(README, runbook, tests):
+
+- **RUNTIME VERIFIED** — actually executed in this environment.
+- **STATICALLY VERIFIED** — enforced by `backend/tests/test_deployment_static.py` (20 DB-free tests), not executed as a container/DB runtime.
+- **NOT AVAILABLE IN CURRENT ENVIRONMENT** — requires Docker/PostgreSQL; exact commands are documented, nothing is faked.
+
+**Runtime availability matrix:** Docker, Docker Compose and PostgreSQL
+(`psql`, `pg_isready`) are **NOT AVAILABLE**; Python 3.14 (project venv),
+Node 24/npm, and the locally cached FastEmbed model `BAAI/bge-small-en-v1.5`
+(384-dim; timed embed ~1.06 s) are **RUNTIME VERIFIED — AVAILABLE**, so
+semantic search is offline-capable after the one-time model cache.
+
+**Statically verified (new tests):** backend Dockerfile shape (slim base,
+constraint-pinned install, code-only COPY, non-root `appuser`,
+`alembic upgrade head` before uvicorn, no secrets/`.env` in instructions);
+frontend two-stage lockfile build; `.dockerignore` excluding env/venv/
+storage/caches; nginx SPA fallback + same-origin `/api` proxy with a 30 MB
+upload ceiling; compose topology (backend gated on a *healthy* postgres,
+persistent named volumes, minimal documented port surface, no Redis/queues,
+secrets via interpolation only); frontend browser-safe env usage
+(`VITE_API_BASE_URL` same-origin default) and real demo-flow routes; demo
+seed/reset safety (DEMO_-labelled data only, reset scoped to demo rows);
+migration-chain + DDL-parity regression.
+
+**Runtime-verified (DB-free):** `/api/health` and `/api/dashboard/statuses`
+stay honest under a database outage — HTTP 200 with `connected:false` /
+`UNAVAILABLE` / `data_available:false`, never fake health or fabricated
+zeroes — across LLM/embedding/retrieval availability states. Docker image
+builds, `alembic upgrade head` on live PostgreSQL, demo seed execution and
+the seeded end-to-end walkthrough are **NOT VERIFIED** here; the exact
+commands are in the runbook.
+
+**📘 Demo runbook: [`docs/SIH_DEMO_RUNBOOK.md`](docs/SIH_DEMO_RUNBOOK.md)** —
+prerequisites, seeding, the 10-screen demo flow, "what to say" (USP), and
+honest failure recovery.
+
 ## Database Setup (PostgreSQL)
 
 **PostgreSQL 14+ is required for database features.** The API itself still
@@ -583,6 +623,7 @@ in safe read-only modes.
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
 - ✅ End-to-end workflow & demo readiness (Step 15): canonical workflow verified upload→…→audit trail, provenance chain continuity, AI state honesty (insufficient/unavailable/error/injection-safe), demo fixture aligned with current schema, AI Query page grounding the last placeholder route, DB-free hardening tests + DB-dependent E2E test
+- ✅ Production deployment validation & SIH demo environment (Step 17): static Docker/compose/nginx/frontend validation as executable tests, runtime-verified health/status honesty under outages, demo seed/reset safety checks, runtime availability matrix (Docker/PostgreSQL NOT AVAILABLE — documented, never faked), and the SIH demo runbook (`docs/SIH_DEMO_RUNBOOK.md`)
 - ✅ Production dashboard (Step 14): read-only `GET /api/dashboard/summary` + `/statuses` — honest health statuses (CONNECTED/OPERATIONAL/DEGRADED/NOT CONFIGURED/UNAVAILABLE), live source-of-truth metrics, metadata-only recents, intelligence availability, module entry points, offline state that never fabricates zeroes
 - ✅ Document & topic intelligence foundation (Step 13): bounded knowledge-index corpus, deterministic TF-IDF keywords/phrases, co-occurrence topics with derived labels, word-cloud data, topic↔document relationships, deterministic summaries + optional labeled AI summary, intelligence APIs and Topic Intelligence page with search deep-links
 - ✅ Report intelligence & visualization foundation (Step 12): deterministic KPI/trend/comparison/distribution engines with conflict-aware exclusions, descriptive-only insights, frontend-friendly chart DATA specs, Report Generator page (KPI cards, SVG charts, conflict indicators), optional labeled AI narrative with deterministic fallback, `POST /api/reports/analyze`
@@ -606,4 +647,6 @@ in safe read-only modes.
 - ⬜ Topic modelling upgrades (LDA-style, embedding-based clustering) — deterministic keyword/phrase/topic foundation exists as of Step 13
 - ⬜ Authentication / RBAC (still open — dashboard and APIs are unauthenticated prototype code; do not expose publicly)
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture.
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture
+and [`docs/SIH_DEMO_RUNBOOK.md`](docs/SIH_DEMO_RUNBOOK.md) for the SIH demo
+environment guide.
