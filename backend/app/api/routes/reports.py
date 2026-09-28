@@ -26,8 +26,15 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.exceptions import AppError, DatabaseUnavailableError
 from app.models import AuditLog
-from app.reports.service import audit_metadata, generate_report, log_report_generation
+from app.reports.service import (
+    analyze_report,
+    audit_metadata,
+    generate_report,
+    log_report_analysis,
+    log_report_generation,
+)
 from app.reports.spec import build_specification
+from app.schemas.report_analytics import ReportAnalyzeRequest, ReportAnalyzeResponse
 from app.schemas.reports import ReportGenerateRequest, ReportGenerateResponse
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -123,4 +130,75 @@ def generate_report_route(
             **headers,
             "Content-Disposition": f'attachment; filename="{result["artifact"]["filename"]}"',
         },
+    )
+
+
+@router.post("/analyze", response_model=ReportAnalyzeResponse)
+def analyze_report_route(
+    payload: ReportAnalyzeRequest,
+    db: Session = Depends(get_db),
+) -> ReportAnalyzeResponse:
+    """Deterministic analytics over the structured records (Step 12).
+
+    Returns KPIs, trends, comparisons, distributions, insights and chart DATA
+    specifications for the requested selection — same conflict rules as
+    report generation: conflicting values are never averaged, never given a
+    winner, never plotted as certain. The optional AI narrative (opt-in via
+    `include_narrative`) is generated only from the deterministic results and
+    falls back honestly when the LLM is unavailable.
+    """
+    try:
+        specification = build_specification(
+            title=payload.title,
+            report_type=payload.report_type,
+            reporting_period=payload.reporting_period,
+            document_ids=payload.document_ids,
+            entities=payload.entities,
+            metrics=payload.metrics,
+            output_format="docx",
+            filters=(payload.filters.model_dump() if payload.filters else None),
+            requester=payload.requester,
+            include_narrative=payload.include_narrative,
+        )
+
+        try:
+            result = analyze_report(specification, db=db)
+        except DatabaseUnavailableError:
+            raise
+        except SQLAlchemyError as exc:
+            logger.exception("Report analysis failed at the database level")
+            raise DatabaseUnavailableError from exc
+
+        log_report_analysis(db, result)
+
+    except AppError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — keep the JSON error contract
+        logger.exception("Report analysis failed unexpectedly")
+        raise AppError(
+            status_code=500,
+            code="report_analysis_failed",
+            message="Report analysis failed unexpectedly.",
+        ) from exc
+
+    return ReportAnalyzeResponse(
+        status=result["status"],
+        report_id=result["report_id"],
+        fingerprint=result["fingerprint"],
+        specification=result["specification"],
+        generated_at=result["generated_at"],
+        record_count=result["record_count"],
+        document_count=result["document_count"],
+        conflict_count=result["conflict_count"],
+        validation_warning_error_count=result["validation_warning_error_count"],
+        excluded_value_count=result["excluded_value_count"],
+        kpis=result["kpis"],
+        trends=result["trends"],
+        comparisons=result["comparisons"],
+        distributions=result["distributions"],
+        insights=result["insights"],
+        charts=result["charts"],
+        excluded_values=result["excluded_values"],
+        narrative=result["narrative"],
+        limitations=result["limitations"],
     )

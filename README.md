@@ -304,6 +304,16 @@ selector and score chips explicitly labeled *retrieval metrics, not trust*;
 semantic unavailability is surfaced honestly (with the lexical fallback reason
 in hybrid mode).
 
+## Report Intelligence & Visualization (Step 12)
+
+Step 12 extends the Step 11 report foundation with a deterministic analytical layer — KPIs, trends, comparisons, distributions, insights and frontend-friendly **chart DATA specifications** — plus an optional, strictly-grounded AI narrative. The deterministic engine remains authoritative; nothing replaces Step 11 and no new source of truth is introduced.
+
+**`POST /api/reports/analyze`** returns the full analytical payload for a report selection. **Deterministic / verified:** KPIs are computed per (metric, unit, period) — never summed across periods — from validated, non-conflicting normalized values only. Excluded values (conflicts, validation flags, non-numeric normalized values, disagreeing duplicates) keep their raw form with an explicit reason; unsafe conversion never happens silently. Trends report ordered periods, absolute/percentage change (omitted for zero bases) and explicit `missing_periods` gaps — never interpolated. Comparisons state numerical differences within one unit only, with no "better/worse" labels. **Conflicts propagate:** conflicted keys produce `REVIEW_REQUIRED` — no fake averages, no winners, no definitive trends; conflicted entities appear as visible `null` gaps in comparisons and charts.
+
+**Insights are descriptive only** ("production increased from X to Y between P1 and P2") — no causal claims, no speculation. **Chart specifications** (`line` / `bar` / `comparison`) carry type, axes, unit, series, source record ids and validation/conflict status; the backend renders no images (no visualization dependency was added) — the frontend Report Generator page draws inline SVG with explicit gap rendering and VERIFIED / REVIEW REQUIRED badges.
+
+**Optional AI narrative (labeled):** with `include_narrative` (or `include_narrative: true`), the Step 10 LLM abstraction may draft a narrative from the deterministic analytical payload only — closed context, no retrieval, forbidden from inventing numbers/dates/causes, strict JSON contract. States: `ok` (labeled AI-GENERATED — VERIFY), `unavailable` / `failed` (reason preserved) — always falling back to the deterministic template narrative. Report generation never fails because the LLM is absent. Audit rows (`report.generate`, `report.analyze`) stay metadata-only.
+
 ## Automated Report Generation (Step 11)
 
 Step 11 adds the deterministic, provenance-grounded report foundation: `POST /api/reports/generate` produces a **DOCX** report from validated structured records already stored by the platform. **No LLM is involved anywhere** in the pipeline and there is no code path that can invent a value — every figure originates from `extracted_records` (Step 7) and is rendered with its full provenance.
@@ -521,6 +531,7 @@ in safe read-only modes.
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
+- ✅ Report intelligence & visualization foundation (Step 12): deterministic KPI/trend/comparison/distribution engines with conflict-aware exclusions, descriptive-only insights, frontend-friendly chart DATA specs, Report Generator page (KPI cards, SVG charts, conflict indicators), optional labeled AI narrative with deterministic fallback, `POST /api/reports/analyze`
 - ✅ Automated report generation foundation (Step 11): deterministic provenance-grounded DOCX via `POST /api/reports/generate` — typed bounded specification, read-only data engine over structured records, conflict groups with both sides preserved (REVIEW REQUIRED, no winner), explicit missing-data markers, deterministic sections + byte-stable artifact, metadata-only audit; no LLM, no fabrication
 - ✅ AI query foundation (Step 10): retrieval-grounded Q&A `POST /api/ai/query` — pluggable LLM provider (OpenAI-compatible / labeled mock), bounded provenance-complete evidence, strict JSON contract, deterministic conflict surfacing, honest insufficient-evidence/unavailable states, prompt-injection resistance, metadata-only audit
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
@@ -537,7 +548,7 @@ in safe read-only modes.
 - ⬜ Vector store optimization (pgvector) — JSONB embeddings on `knowledge_index` already exist as of Step 9
 - ⬜ Richer RAG (conversation memory, re-ranking, page-level chunking) — retrieval-grounded Q&A already exists as of Step 10
 - ⬜ Report artifact persistence + download history — in-memory DOCX generation already exists as of Step 11
-- ⬜ Report charts/visuals and CMPDI/CIL template pack
+- ⬜ DOCX-embedded chart images and CMPDI/CIL template pack — chart DATA specs + frontend SVG visualization exist as of Step 12
 - ⬜ Topic Intelligence (word clouds, topic modelling)
 - ⬜ Authentication / RBAC
 

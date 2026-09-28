@@ -83,14 +83,24 @@ def _add_section(document, section: dict[str, Any]) -> None:
         for run in banner.runs:
             run.font.bold = True
 
+    if section.get("note"):
+        document.add_paragraph(section["note"])
+    if section.get("excluded_note"):
+        document.add_paragraph(section["excluded_note"])
     if section.get("empty_note"):
         document.add_paragraph(section["empty_note"])
 
 
-def render_report_docx(data: ReportData) -> bytes:
-    """Render the collected report data into DOCX bytes (deterministic
-    content; only the timestamp block varies between runs)."""
+def render_report_docx(data: ReportData, sections: list[dict[str, Any]] | None = None) -> bytes:
+    """Render the report into DOCX bytes (deterministic content).
+
+    `sections` (Step 12) is the composed section list from the service layer
+    (Step 11 sections + optional analytical/narrative sections); when omitted,
+    the Step 11 sections are derived from the data as before.
+    """
     spec = data.specification
+    if sections is None:
+        sections = build_sections(data)
     document = DocxDocument()
 
     document.add_heading(spec.title, level=0)
@@ -122,7 +132,7 @@ def render_report_docx(data: ReportData) -> bytes:
         "none was resolved automatically."
     )
 
-    for section in build_sections(data):
+    for section in sections:
         _add_section(document, section)
 
     buffer = io.BytesIO()

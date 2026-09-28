@@ -299,6 +299,37 @@ fingerprint identifies content); DOCX only (no verified PDF mechanism, none
 attempted); no charts; no auth. Prototype/demo output — not an official
 CMPDI/CIL report.
 
+## 1k. Report intelligence & visualization layer (Step 12)
+
+```
+   ReportData (Step 11 engine — structured records, conflicts, summary)
+         ↓  app/reports/analytics/ (deterministic, no LLM)
+   KPIs (per metric+unit+period; validated values only)
+   Trends (ordered points, absolute/percent change, explicit missing_periods)
+   Comparisons (per-entity difference within one unit; no winner labels)
+   Distributions (histograms) · Insights (descriptive only)
+   ChartSpecs (line | bar | comparison — DATA only, frontend renders)
+         ↓  conflicts propagate: conflicted keys ⇒ REVIEW_REQUIRED,
+   │     no aggregates, entities appear as null gaps
+   excluded_values: every record kept out of arithmetic, with reason + raw
+         ↓  POST /api/reports/analyze          POST /api/reports/generate
+   JSON analytical payload                 DOCX (+ optional analytical
+   (+ optional labeled AI narrative)       sections & narrative appendix)
+```
+
+**Arithmetic rules (enforced by construction):** normalized values only,
+finite plain decimals only, validated statuses only (pass/valid), conflicts
+excluded with reason, per-cell disagreement excluded (never averaged),
+KPIs never summed across periods, percentage change omitted for zero bases,
+units never cross-compared. `collect_exclusions` is the single authoritative
+derivation of every excluded record.
+
+**AI narrative (optional, Step 10 provider):** closed context (deterministic
+payload only), descriptive-only system rules, strict JSON contract
+(`narrative`/`summary_points`/`limitations`), states ok/unavailable/failed,
+deterministic template fallback — generation never fails because the LLM is
+absent; AI output is always labeled and never authoritative.
+
 ## 2. Backend layering
 
 ```

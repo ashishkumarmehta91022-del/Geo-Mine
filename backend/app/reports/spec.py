@@ -90,6 +90,10 @@ class ReportSpecification:
     filters: ReportFilters = field(default_factory=ReportFilters)
     generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     requester: str | None = None
+    # Step 12: optional analytical extensions (deterministic engine is
+    # authoritative; the AI narrative is an additional labeled layer).
+    include_analytics: bool = False
+    include_narrative: bool = False
 
     def to_payload(self) -> dict:
         """Canonical dict used for the fingerprint and response echo."""
@@ -104,6 +108,8 @@ class ReportSpecification:
             "output_format": self.output_format,
             "filters": self.filters.to_payload(),
             "requester": self.requester,
+            "include_analytics": self.include_analytics,
+            "include_narrative": self.include_narrative,
         }
 
     def fingerprint(self) -> str:
@@ -232,6 +238,8 @@ def build_specification(
     filters=None,
     requester=None,
     generated_at=None,
+    include_analytics=False,
+    include_narrative=False,
 ) -> ReportSpecification:
     """Validate raw request fields into a frozen ReportSpecification.
 
@@ -276,4 +284,6 @@ def build_specification(
         filters=_clean_filters(filters),
         generated_at=when,
         requester=clean_requester,
+        include_analytics=bool(include_analytics),
+        include_narrative=bool(include_narrative),
     )
