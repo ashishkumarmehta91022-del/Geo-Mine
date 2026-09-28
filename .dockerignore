@@ -1,0 +1,23 @@
+# Step 16 — keep secrets and local artifacts out of build contexts.
+# Never bake these into images:
+.env
+.env.*
+backend/.env
+**/.env
+!.env.example
+
+# Local artifacts:
+.git
+.freebuff/
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+node_modules
+frontend/dist
+storage
+uploads
+demo_storage
+*.md

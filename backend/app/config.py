@@ -10,6 +10,7 @@ discrete variables (DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD).
 from functools import lru_cache
 from urllib.parse import quote
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,7 +33,7 @@ class Settings(BaseSettings):
     database_url: str = ""
     # Option 2: discrete variables (composed into a URL when DATABASE_URL is empty).
     db_host: str = "localhost"
-    db_port: int = 5432
+    db_port: int = Field(default=5432, ge=1, le=65535)
     db_name: str = "cmpdi_reporting"
     db_user: str = "cmpdi_user"
     db_password: str = ""  # comes from the environment only; never hard-coded
@@ -45,31 +46,31 @@ class Settings(BaseSettings):
     llm_model: str = ""
     # OpenAI-compatible base URL (e.g. a local server or a cloud endpoint).
     llm_base_url: str = ""
-    llm_timeout_seconds: float = 60.0
+    llm_timeout_seconds: float = Field(default=60.0, ge=1.0)
 
     # --- Document storage / uploads (Step 3) ---
     # Local filesystem root for uploaded originals (dev). Swappable for object storage later.
     document_storage_path: str = "./storage/documents"
-    # Maximum accepted upload size in megabytes.
-    max_upload_size_mb: int = 25
+    # Maximum accepted upload size in megabytes (bounded: 1 MB .. 4 GB).
+    max_upload_size_mb: int = Field(default=25, ge=1, le=4096)
 
     # --- OCR (Step 5) ---
     # Box/mean confidences below this flag the unit `review_required`.
     # Never used to ALTER text — OCR output is always preserved verbatim.
-    ocr_confidence_threshold: float = 0.70
+    ocr_confidence_threshold: float = Field(default=0.70, gt=0.0, le=1.0)
     # Wall-clock cap per OCR call (protects against pathological inputs).
-    ocr_timeout_seconds: float = 120.0
+    ocr_timeout_seconds: float = Field(default=120.0, gt=0.0)
     # Reject absurd images before OCR (decompression-bomb guardrail).
-    ocr_max_image_pixels: int = 40_000_000
+    ocr_max_image_pixels: int = Field(default=40_000_000, gt=0)
     # Render zoom for scanned PDF pages before OCR (~2.0 ≈ 144 dpi).
-    pdf_ocr_zoom: float = 2.0
+    pdf_ocr_zoom: float = Field(default=2.0, gt=0.0)
 
     # --- Semantic embeddings (Step 9) ---
     # Bounded safeguards for the local embedding pipeline (see embeddings/config.py).
-    embedding_max_input_chars: int = 4000
-    embedding_max_batch_size: int = 32
-    embedding_max_units_per_document: int = 500
-    embedding_timeout_seconds: float = 120.0
+    embedding_max_input_chars: int = Field(default=4000, gt=0)
+    embedding_max_batch_size: int = Field(default=32, gt=0)
+    embedding_max_units_per_document: int = Field(default=500, gt=0)
+    embedding_timeout_seconds: float = Field(default=120.0, gt=0.0)
 
     # --- CORS ---
     cors_origins: str = "http://localhost:5173,http://localhost:3000"

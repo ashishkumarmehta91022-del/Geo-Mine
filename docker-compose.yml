@@ -1,0 +1,58 @@
+# Development/deployment compose file (Step 16) — static configuration,
+# NOT runtime-verified in this environment (Docker unavailable locally).
+# Secrets arrive ONLY via environment (.env at compose level, git-ignored):
+# nothing is baked into images. No Redis/queues — the app does not use them.
+#
+# Usage (when Docker is available):
+#   docker compose up --build           # postgres + backend + frontend
+#   docker compose down                 # stop (data persists in the volume)
+#
+# The backend container runs `alembic upgrade head` before starting uvicorn.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-cmpdi_reporting}
+      POSTGRES_USER: ${DB_USER:-cmpdi_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cmpdi_user} -d ${DB_NAME:-cmpdi_reporting}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  backend:
+    build: ./backend
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      # Compose service name resolves inside the compose network:
+      DATABASE_URL: postgresql://${DB_USER:-cmpdi_user}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-cmpdi_reporting}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      DOCUMENT_STORAGE_PATH: /data/documents
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    volumes:
+      - uploads:/data/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  postgres_data:
+  uploads:

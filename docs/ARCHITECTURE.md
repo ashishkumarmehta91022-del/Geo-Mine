@@ -398,6 +398,27 @@ identifiers/values are `DEMO_`-prefixed, storage is isolated under
 `demo/`, the audit row marks it, and `--reset` removes it. Demo data is
 explicitly NOT CMPDI/CIL data.
 
+## 1o. Deployment readiness & reproducibility (Step 16)
+
+```
+   .env (git-ignored) ──► backend Settings (typed, bounded — app/config.py)
+   .env.example (placeholders only, committed)
+   backend/constraints.txt (verified pins for the ranged core dependencies)
+   docker-compose.yml: postgres (healthcheck) → backend (alembic + uvicorn,
+   non-root) → frontend (nginx SPA + same-origin /api proxy)
+   .dockerignore: keeps .env/.git/venvs/node_modules/storage out of contexts
+```
+
+**Reproducibility contract:** `pip install -r requirements.txt
+-c constraints.txt` pins the verified core stack (extractors/OCR/embeddings
+were already exact-pinned); the frontend is locked by `package-lock.json`.
+Configuration is validated at load (bounded ports, upload size, OCR/embedding
+timeouts) so invalid deployment values fail fast rather than silently
+mis-configure the platform. The LLM stays optional — the container starts
+and every deterministic feature works with `LLM_PROVIDER` empty.
+**Docker configuration is statically validated only (Docker unavailable in
+the development environment) — runtime deployment is not claimed.**
+
 ## 2. Backend layering
 
 ```

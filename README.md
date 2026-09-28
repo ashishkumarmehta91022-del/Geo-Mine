@@ -83,7 +83,7 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate            # Windows
 source .venv/bin/activate         # macOS / Linux
-pip install -r requirements.txt
+pip install -r requirements.txt -c constraints.txt
 copy ..\.env.example .env         # Windows  (macOS/Linux: cp ..\.env.example .env)
 ```
 
@@ -98,6 +98,27 @@ Run tests:
 ```bash
 pytest
 ```
+
+## Docker (optional, Step 16)
+
+A minimal reproducible container setup is provided and statically validated
+(YAML parse, service topology, secret-safety) — **not runtime-verified in
+this environment (Docker unavailable locally)**:
+
+```bash
+# 1. configure: copy .env.example to .env and set DB_PASSWORD (+ optional LLM_*).
+# 2. build & run postgres + backend (migrations run at startup) + frontend:
+docker compose up --build
+docker compose down              # data persists in the postgres_data volume
+```
+
+Services: `postgres` (16-alpine, healthcheck), `backend` (non-root, runs
+`alembic upgrade head` before uvicorn), `frontend` (nginx serving the built
+SPA with a same-origin `/api` proxy). No Redis/queues — the app does not use
+them. Secrets arrive ONLY via the git-ignored `.env` (compose
+interpolation); nothing is baked into images. The `.dockerignore` keeps
+`.env`, `.git`, venvs, `node_modules` and uploaded storage out of build
+contexts.
 
 ## Database Setup (PostgreSQL)
 
@@ -143,8 +164,8 @@ Copy `.env.example` to `.env` (root and/or `backend/`) and fill in real values.
 | `DATABASE_URL`  | backend   | No                 | PostgreSQL connection string (wins over `DB_*` when set) |
 | `DB_HOST` / `DB_PORT` | backend | No             | Discrete DB connection variables (used when `DATABASE_URL` empty) |
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` | backend | No | Discrete DB connection variables                    |
-| `LLM_PROVIDER`  | backend   | No                 | AI provider name (unused until later steps) |
-| `LLM_API_KEY`   | backend   | No                 | AI provider key (unused until later steps) |
+| `LLM_PROVIDER`  | backend   | No                 | `openai-compatible` enables AI Query / AI narrative / AI summary (empty = honest unavailable states) |
+| `LLM_API_KEY` / `LLM_MODEL` / `LLM_BASE_URL` / `LLM_TIMEOUT_SECONDS` | backend | No | Provider credentials/config — set in your local `.env` only, never committed |
 | `ENVIRONMENT`   | backend   | No                 | `development` / `production`              |
 | `DEBUG`         | backend   | No                 | Verbose logging when `true`               |
 | `CORS_ORIGINS`  | backend   | No                 | Comma-separated allowed origins           |
