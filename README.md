@@ -304,6 +304,14 @@ selector and score chips explicitly labeled *retrieval metrics, not trust*;
 semantic unavailability is surfaced honestly (with the lexical fallback reason
 in hybrid mode).
 
+## Production Dashboard (Step 14)
+
+Step 14 replaces the Step 1 placeholder with an **operations dashboard**: a read-only entry point that composes the whole platform — it implements nothing new, it links everywhere.
+
+**`GET /api/dashboard/summary`** aggregates live source-of-truth counts only: documents by lifecycle status, structured records by validation status, validation results (PASS/WARNING/ERROR/REVIEW REQUIRED), knowledge-index units with embedding coverage, recent documents (metadata only — no paths/contents), recent audit activity, and Step 13 intelligence availability (topic count + top terms from the existing deterministic engine). `GET /api/dashboard/statuses` offers a lightweight status-only poll. Statuses are honest — `CONNECTED` / `OPERATIONAL` / `DEGRADED` / `NOT CONFIGURED` / `UNAVAILABLE` — an unavailable dependency is never shown healthy. **When PostgreSQL is unreachable the summary is still HTTP 200 with `data_available=false` and metric sections absent: the UI shows "Database unavailable — no live data", never fabricated zeroes** (true "0 documents" and "cannot query" are explicitly distinguishable). One `dashboard.summary` audit row with counts only.
+
+**Frontend:** the Dashboard page renders system-health tiles, key metric tiles (linked to their modules), documents/processing, validation & review (with a clear path to the review queue and the no-winner conflict note), knowledge & intelligence (with top topics), reports & analytics entry points (Report Generator/Analytics, Knowledge Search, AI Query, Topic Intelligence, Validation, Documents, Data Explorer), recent documents table and recent activity. Dashboard remains the landing page; no new UI framework; authentication is still NOT implemented — documented as a limitation, not simulated.
+
 ## Document & Topic Intelligence (Step 13)
 
 Step 13 adds deterministic document/topic intelligence derived from the EXISTING knowledge index — no new source of truth, no re-reading of binary files, no topic-modeling framework. Everything is rebuildable and every term traces back to document/page/source references.
@@ -541,6 +549,7 @@ in safe read-only modes.
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
+- ✅ Production dashboard (Step 14): read-only `GET /api/dashboard/summary` + `/statuses` — honest health statuses (CONNECTED/OPERATIONAL/DEGRADED/NOT CONFIGURED/UNAVAILABLE), live source-of-truth metrics, metadata-only recents, intelligence availability, module entry points, offline state that never fabricates zeroes
 - ✅ Document & topic intelligence foundation (Step 13): bounded knowledge-index corpus, deterministic TF-IDF keywords/phrases, co-occurrence topics with derived labels, word-cloud data, topic↔document relationships, deterministic summaries + optional labeled AI summary, intelligence APIs and Topic Intelligence page with search deep-links
 - ✅ Report intelligence & visualization foundation (Step 12): deterministic KPI/trend/comparison/distribution engines with conflict-aware exclusions, descriptive-only insights, frontend-friendly chart DATA specs, Report Generator page (KPI cards, SVG charts, conflict indicators), optional labeled AI narrative with deterministic fallback, `POST /api/reports/analyze`
 - ✅ Automated report generation foundation (Step 11): deterministic provenance-grounded DOCX via `POST /api/reports/generate` — typed bounded specification, read-only data engine over structured records, conflict groups with both sides preserved (REVIEW REQUIRED, no winner), explicit missing-data markers, deterministic sections + byte-stable artifact, metadata-only audit; no LLM, no fabrication
@@ -561,6 +570,6 @@ in safe read-only modes.
 - ⬜ Report artifact persistence + download history — in-memory DOCX generation already exists as of Step 11
 - ⬜ DOCX-embedded chart images and CMPDI/CIL template pack — chart DATA specs + frontend SVG visualization exist as of Step 12
 - ⬜ Topic modelling upgrades (LDA-style, embedding-based clustering) — deterministic keyword/phrase/topic foundation exists as of Step 13
-- ⬜ Authentication / RBAC
+- ⬜ Authentication / RBAC (still open — dashboard and APIs are unauthenticated prototype code; do not expose publicly)
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the target architecture.

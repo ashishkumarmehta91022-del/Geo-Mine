@@ -354,6 +354,28 @@ is opt-in, strictly grounded (closed evidence context, strict JSON
 contract), labeled AI-GENERATED — VERIFY, and never blocks the
 authoritative deterministic summary.
 
+## 1m. Production dashboard layer (Step 14)
+
+```
+   source-of-truth tables (documents · extracted_records · validation_results
+   · knowledge_index · audit_logs)  +  existing services
+   (knowledge_service.index_statistics, intelligence engines, health probe,
+   embedding/LLM availability)
+         ↓  app/dashboard/service.py — read-only aggregation (no writes,
+   │     nothing persisted; pure builders unit-testable without a DB)
+         ↓  GET /api/dashboard/summary · GET /api/dashboard/statuses
+   DashboardSummary: honest statuses + metrics + metadata-only recents
+         ↓  frontend DashboardPage (landing page; entry points to every module)
+```
+
+**Honesty contract:** PostgreSQL unreachable ⇒ HTTP 200 with
+`data_available=false`, metric sections null and an explicit offline banner
+— zero-data and cannot-query are distinguishable; an unavailable dependency
+is never rendered healthy (UNAVAILABLE / NOT CONFIGURED / DEGRADED);
+recent documents expose metadata only (no paths, no contents); audit rows
+carry counts only. **Limitation:** no authentication yet — the API is
+unauthenticated prototype code and must not be exposed publicly.
+
 ## 2. Backend layering
 
 ```
