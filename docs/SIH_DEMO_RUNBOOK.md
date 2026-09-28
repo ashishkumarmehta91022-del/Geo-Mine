@@ -2,6 +2,11 @@
 
 **USP:** *"From Unstructured Documents to Verified, Traceable Intelligence."*
 
+> Companion docs: [`SIH_FINAL_DEMO_SCRIPT.md`](SIH_FINAL_DEMO_SCRIPT.md)
+> (5-minute judge walkthrough + Q&A), [`SIH_90_SECOND_PITCH.md`](SIH_90_SECOND_PITCH.md),
+> [`SIH_TECHNICAL_CHEAT_SHEET.md`](SIH_TECHNICAL_CHEAT_SHEET.md),
+> [`SIH_IMPLEMENTED_VS_FUTURE.md`](SIH_IMPLEMENTED_VS_FUTURE.md).
+
 This runbook is the single script for setting up, seeding, demonstrating, and
 recovering the SIH demo environment. Every item is labelled with a
 verification status:
