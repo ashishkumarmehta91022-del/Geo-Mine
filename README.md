@@ -304,6 +304,18 @@ selector and score chips explicitly labeled *retrieval metrics, not trust*;
 semantic unavailability is surfaced honestly (with the lexical fallback reason
 in hybrid mode).
 
+## Automated Report Generation (Step 11)
+
+Step 11 adds the deterministic, provenance-grounded report foundation: `POST /api/reports/generate` produces a **DOCX** report from validated structured records already stored by the platform. **No LLM is involved anywhere** in the pipeline and there is no code path that can invent a value — every figure originates from `extracted_records` (Step 7) and is rendered with its full provenance.
+
+**Pipeline (`app/reports/`):** typed, bounded `ReportSpecification` (title, report type, period, document/entity/metric selections, requested sections, filters, output format — fingerprinted, extensible) → read-only data engine over the Step 7 source-of-truth tables (deterministic ordering, ≤ 500 records, document/entity/metric/period/status/method filters) → deterministic conflict detection (same entity/metric/period/unit with different raw values ⇒ `REVIEW REQUIRED`, **both values kept with their sources, never a winner**) → deterministic sections (Executive Summary template, Key Figures table, Detailed Data, Validation/Review Notes, Sources/Evidence) → DOCX rendering via python-docx (clean headings/tables, byte-deterministic via canonical zip timestamps).
+
+**Data integrity guarantees:** raw values pass through verbatim (never "corrected"); missing values render an explicit `DATA MISSING` marker — never estimated; conflicting values are never silently resolved; source documents and structured records are never modified; oversized selections are truncated honestly and marked partial.
+
+**API:** `POST /api/reports/generate` returns the `.docx` as a download attachment (metadata in `X-Report-*` headers) or JSON metadata with `output_format: "json"`. Audit row `report.generate` stores metadata only (counts, status, fingerprint) — never values or document contents.
+
+**Current limitations:** artifacts are generated in-memory and **not persisted** (no report storage model yet — regenerate to reproduce; the fingerprint identifies the content); DOCX is the only output format (no verified PDF mechanism exists — none is attempted); no charts yet; no authentication. **Prototype/demo output — not an official CMPDI/CIL report and carries no certification.**
+
 ## AI Query — Retrieval-Grounded Q&A (Step 10)
 
 Step 10 adds the first AI answer layer: `POST /api/ai/query` answers natural-language questions **only** from evidence retrieved out of the Step 8/9 knowledge index. The LLM never searches the database, never answers without evidence, and never resolves conflicts.
@@ -509,6 +521,7 @@ in safe read-only modes.
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
+- ✅ Automated report generation foundation (Step 11): deterministic provenance-grounded DOCX via `POST /api/reports/generate` — typed bounded specification, read-only data engine over structured records, conflict groups with both sides preserved (REVIEW REQUIRED, no winner), explicit missing-data markers, deterministic sections + byte-stable artifact, metadata-only audit; no LLM, no fabrication
 - ✅ AI query foundation (Step 10): retrieval-grounded Q&A `POST /api/ai/query` — pluggable LLM provider (OpenAI-compatible / labeled mock), bounded provenance-complete evidence, strict JSON contract, deterministic conflict surfacing, honest insufficient-evidence/unavailable states, prompt-injection resistance, metadata-only audit
 - ✅ Environment configuration via `.env` / `.env.example` — no secrets in code
 - ✅ React + TypeScript + Tailwind app shell: sidebar, header, content area
@@ -523,7 +536,8 @@ in safe read-only modes.
 - ⬜ Authoritative field schema (demo structuring config is in place and swappable)
 - ⬜ Vector store optimization (pgvector) — JSONB embeddings on `knowledge_index` already exist as of Step 9
 - ⬜ Richer RAG (conversation memory, re-ranking, page-level chunking) — retrieval-grounded Q&A already exists as of Step 10
-- ⬜ Report generation
+- ⬜ Report artifact persistence + download history — in-memory DOCX generation already exists as of Step 11
+- ⬜ Report charts/visuals and CMPDI/CIL template pack
 - ⬜ Topic Intelligence (word clouds, topic modelling)
 - ⬜ Authentication / RBAC
 

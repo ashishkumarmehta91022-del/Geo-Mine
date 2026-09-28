@@ -268,6 +268,37 @@ evidence text cannot elevate itself to instructions (delimiters are
 neutralized inside untrusted content); audit rows (`ai.query`) carry metadata
 only. The mock provider output is permanently labeled `[MOCK LLM]`.
 
+## 1j. Automated report generation layer (Step 11)
+
+```
+   validated structured data (extracted_records — source of truth, untouched)
+         ↓  POST /api/reports/generate
+   ReportSpecification  (typed, bounded, fingerprinted — app/reports/spec.py)
+         ↓  app/reports/engine.py — collect_report_data (READ-ONLY)
+   filtered selection (documents/entities/metrics/period/status/method,
+   deterministic order, ≤ 500 records) + provenance context (docs, pages)
+         ↓  _detect_conflicts (deterministic, no winner)
+   ConflictItems: (entity, metric, period, unit) with disagreeing raw values
+   → BOTH values + sources kept, status REVIEW REQUIRED
+         ↓  app/reports/sections.py (deterministic templates, no LLM)
+   Executive Summary · Key Figures · Detailed Data ·
+   Validation/Review Notes · Sources/Evidence
+         ↓  app/reports/docx.py (python-docx, canonical zip = byte-stable)
+   DOCX artifact (in-memory) + audit row report.generate (metadata only)
+```
+
+**Integrity guarantees (enforced by construction):** values only come from
+stored records (`value_raw` verbatim, `normalized_value` alongside);
+missing data renders `DATA MISSING` — never estimated; conflicts are never
+silently resolved; source documents/records are never modified; oversized
+selections truncate deterministically and are marked partial; units are part
+of the conflict key (no cross-unit conversion guessing).
+
+**Limitations:** no artifact persistence (regenerate to reproduce — the
+fingerprint identifies content); DOCX only (no verified PDF mechanism, none
+attempted); no charts; no auth. Prototype/demo output — not an official
+CMPDI/CIL report.
+
 ## 2. Backend layering
 
 ```
