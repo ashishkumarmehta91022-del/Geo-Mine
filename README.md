@@ -608,6 +608,26 @@ XLSX/XLS → sheet → row/cell, image → image.
 no macro/script execution, no archive extraction to disk; libraries are used
 in safe read-only modes.
 
+## SIH Submission & Demo Documentation
+
+Complete SIH26023 submission package (all relative links):
+
+- [`docs/SIH_PS_ALIGNMENT.md`](docs/SIH_PS_ALIGNMENT.md) — implementation mapped against the problem statement (IMPLEMENTED / PARTIALLY / FUTURE / NOT VERIFIED)
+- [`docs/SIH_OBJECTIVES_MATRIX.md`](docs/SIH_OBJECTIVES_MATRIX.md) — objectives → features → implementation → demo screen → tests
+- [`docs/SIH_FINAL_PRESENTATION_OUTLINE.md`](docs/SIH_FINAL_PRESENTATION_OUTLINE.md) — 12-slide, 10–12 minute presentation structure
+- [`docs/SIH_FINAL_DEMO_SCRIPT.md`](docs/SIH_FINAL_DEMO_SCRIPT.md) — 5-minute judge walkthrough + 20-question Q&A
+- [`docs/SIH_DEMO_SCREEN_MAP.md`](docs/SIH_DEMO_SCREEN_MAP.md) — timed screen-by-screen demo map (live routes only)
+- [`docs/SIH_JUDGE_EVIDENCE_CHECKLIST.md`](docs/SIH_JUDGE_EVIDENCE_CHECKLIST.md) — what can be proven live, and where
+- [`docs/SIH_DEMO_FAILURE_CHECKLIST.md`](docs/SIH_DEMO_FAILURE_CHECKLIST.md) — mid-demo recovery playbook
+- [`docs/SIH_TECHNICAL_CHEAT_SHEET.md`](docs/SIH_TECHNICAL_CHEAT_SHEET.md) — verified stack versions + subsystem one-liners
+- [`docs/SIH_IMPLEMENTED_VS_FUTURE.md`](docs/SIH_IMPLEMENTED_VS_FUTURE.md) — capability matrix with code evidence
+- [`docs/SIH_90_SECOND_PITCH.md`](docs/SIH_90_SECOND_PITCH.md) — 90-second pitch + 30-second elevator version
+- [`docs/SIH_VALUE_PROPOSITION.md`](docs/SIH_VALUE_PROPOSITION.md) — problem → solution → user impact
+- [`docs/SIH_TECHNICAL_NOVELTY.md`](docs/SIH_TECHNICAL_NOVELTY.md) — system-level differentiators (libraries ≠ innovation)
+- [`docs/SIH_FINAL_STORY.md`](docs/SIH_FINAL_STORY.md) — the complete narrative, presentation-ready
+- [`docs/SIH_DEMO_RUNBOOK.md`](docs/SIH_DEMO_RUNBOOK.md) — environment setup, seeding, health checks
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — target architecture and layering
+
 ## Current Implementation Status
 
 **Done (Step 1 — Foundation):**
