@@ -4,6 +4,7 @@ import { NAV_ITEMS } from "@/components/layout/navigation";
 import DashboardPage from "@/pages/DashboardPage";
 import DataExplorerPage from "@/pages/DataExplorerPage";
 import DocumentsPage from "@/pages/DocumentsPage";
+import AIQueryPage from "@/pages/AIQueryPage";
 import KnowledgePage from "@/pages/KnowledgePage";
 import PlaceholderPage from "@/pages/PlaceholderPage";
 import ReportGeneratorPage from "@/pages/ReportGeneratorPage";
@@ -26,9 +27,11 @@ export default function App() {
         <Route path="/report-generator" element={<ReportGeneratorPage />} />
         {/* Live page (Step 13) */}
         <Route path="/topic-intelligence" element={<TopicIntelligencePage />} />
+        {/* Live page (Step 15): grounds the dashboard's AI Query entry point */}
+        <Route path="/ai-query" element={<AIQueryPage />} />
         {/* Placeholder pages for modules implemented in later steps */}
         {NAV_ITEMS.filter(
-          (item) => !["/dashboard", "/documents", "/data-explorer", "/knowledge", "/validation", "/report-generator", "/topic-intelligence"].includes(item.path),
+          (item) => !["/dashboard", "/documents", "/data-explorer", "/knowledge", "/validation", "/report-generator", "/topic-intelligence", "/ai-query"].includes(item.path),
         ).map((item) => (
           <Route key={item.path} path={item.path} element={<PlaceholderPage />} />
         ))}

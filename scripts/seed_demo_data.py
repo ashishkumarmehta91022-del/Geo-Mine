@@ -24,7 +24,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from sqlalchemy import select  # noqa: E402
 
 from app.db import SessionLocal  # noqa: E402
-from app.models import AuditLog, Document, DocumentPage, ExtractedRecord, ValidationResult  # noqa: E402
+from app.models import (  # noqa: E402
+    AuditLog,
+    Document,
+    DocumentPage,
+    ExtractedRecord,
+    ValidationResult,
+)
+from app.services import knowledge_service  # noqa: E402
 
 DEMO_FILENAME = "DEMO_borehole_log.pdf"
 
@@ -68,6 +75,10 @@ def seed() -> None:
         )
         session.add_all([page1, page2])
         session.flush()
+
+        # Keep the legacy sync column aligned the way the Step 4 pipeline does.
+        for page in (page1, page2):
+            page.processing_status = page.extraction_status
 
         records = [
             ExtractedRecord(
@@ -127,12 +138,16 @@ def seed() -> None:
 
         session.add(
             ValidationResult(
+                document_id=document.id,          # Step 6: required provenance link
+                page_id=page2.id,
                 extracted_record_id=records[0].id,
+                source_reference="DEMO page 2, table 1",
                 rule_code="range_check",  # Step 6: validation_type renamed to rule_code
                 status="pass",
+                severity="info",
                 message="DEMO value within expected development range.",
+                original_value="1234.5678",   # Step 6: original_value (was actual_value)
                 expected_value="0 .. 100000",
-                actual_value="1234.5678",
             )
         )
         session.add(
@@ -143,11 +158,17 @@ def seed() -> None:
                 details={"demo": True, "seeded_by": "scripts/seed_demo_data.py"},
             )
         )
+        # (audit row is committed with the seed transaction below)
 
         session.commit()
+
+        # Make the DEMO document searchable (Step 8 index; Step 9 embeddings
+        # stay optional/best-effort exactly like the normal pipeline).
+        indexed = knowledge_service.index_document(SessionLocal(), document.id)
+
         print("DEMO data inserted (development sample data only, not real figures):")
         print(f"  document id={document.id}  pages=2  extracted_records=3")
-        print(f"  validation_results=1  audit_logs=1")
+        print(f"  validation_results=1  audit_logs=1  indexed_units={indexed}")
 
 
 def reset() -> None:

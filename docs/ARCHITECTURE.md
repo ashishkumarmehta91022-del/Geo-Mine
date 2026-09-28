@@ -376,6 +376,28 @@ recent documents expose metadata only (no paths, no contents); audit rows
 carry counts only. **Limitation:** no authentication yet — the API is
 unauthenticated prototype code and must not be exposed publicly.
 
+## 1n. End-to-end workflow & demo readiness (Step 15)
+
+```
+   upload → storage → processing (native/OCR) → structured records →
+   validation → knowledge_index → lexical/semantic/hybrid search →
+   AI Query (evidence-grounded) → topic intelligence → analytics →
+   report generation (DOCX) → audit trail
+```
+
+**Lifecycle honesty (verified by tests):** FAILED never masquerades as
+processed; `validation_status` rollups reflect real validation runs;
+searchability requires successful indexing; the dashboard distinguishes
+"0 records" from "database unavailable" (`data_available=false`).
+**Provenance continuity:** document → page/source reference → record
+(value_raw verbatim) → AI evidence ids / report rows / analytics source
+ids. Conflicts keep both sources at every layer.
+
+**Demo policy:** only `scripts/seed_demo_data.py` creates demo data;
+identifiers/values are `DEMO_`-prefixed, storage is isolated under
+`demo/`, the audit row marks it, and `--reset` removes it. Demo data is
+explicitly NOT CMPDI/CIL data.
+
 ## 2. Backend layering
 
 ```

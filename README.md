@@ -304,6 +304,18 @@ selector and score chips explicitly labeled *retrieval metrics, not trust*;
 semantic unavailability is surfaced honestly (with the lexical fallback reason
 in hybrid mode).
 
+## End-to-End Workflow & Demo Readiness (Step 15)
+
+Step 15 hardens the canonical platform workflow and verifies the modules connect: **upload → processing → extraction/OCR → structured records → validation → knowledge index → search (lexical/semantic/hybrid) → AI Query with evidence → topic intelligence → analytics → report generation → audit trail.** Lifecycle honesty is enforced end-to-end: a document never reads as processed when extraction failed, validated when validation did not run, or searchable when indexing failed — failures surface in status, validation rollups and the dashboard.
+
+**Provenance chain** (verified across layers): report/AI answer → structured record (`record_id`, `value_raw` verbatim, `normalized_value`) → page/section/sheet (`page_id`, `source_reference`, extraction method, OCR confidence) → original document (`document_id`). Conflicts preserve both sources everywhere — never a winner.
+
+**AI Query states** (all verified): valid evidence → cited answer; no evidence → `insufficient_evidence` (LLM never invoked); conflicting evidence → both sources preserved + REVIEW REQUIRED; LLM unavailable/error/malformed → honest status with evidence still returned; document text is untrusted (delimiters neutralized, system rules unreachable).
+
+**Demo fixtures:** `python scripts/seed_demo_data.py` seeds a small, clearly-labeled DEMO dataset (all identifiers/values `DEMO_`-prefixed, `source="demo_seed"`, isolated `demo/` storage reference, `--reset` to remove). **Demo data is NOT real CMPDI/CIL data and must never be presented as such.** The fixture is aligned with the current schema (including Step 6 validation fields and Step 8 indexing so seeded documents are searchable).
+
+**Known limitations (unchanged):** PostgreSQL not installed in this environment — DB-dependent E2E tests skip honestly (`backend/tests/test_e2e_workflow.py` verifies the full workflow when a database is configured via `CMPDI_TEST_DATABASE_URL`); no authentication/RBAC; DOCX only (no PDF output — never attempted); LLM optional (platform fully functional without one; AI outputs always labeled).
+
 ## Production Dashboard (Step 14)
 
 Step 14 replaces the Step 1 placeholder with an **operations dashboard**: a read-only entry point that composes the whole platform — it implements nothing new, it links everywhere.
@@ -549,6 +561,7 @@ in safe read-only modes.
 - ✅ Structured data layer + automatic validation: processing → records → validation in one idempotent transaction, verbatim raw values alongside safe normalizations, per-record extraction method/provenance, Data Explorer over cross-document records
 - ✅ Knowledge base & retrieval: idempotent `knowledge_index` (tsvector + GIN) over pages/records/validations, deterministic keyword/phrase search with full provenance and documented ranking, conflict-aware results, auto-refresh on processing, cascade cleanup on deletion, Knowledge Search page
 - ✅ Semantic search & embedding foundation: pluggable local embedding provider (fastembed ONNX, BAAI/bge-small-en-v1.5, 384-d), JSONB embeddings on `knowledge_index` (migration `0006`), `mode=lexical|semantic|hybrid` retrieval with explicit hybrid scoring, provenance and conflict preservation, best-effort post-commit embedding lifecycle, bounded-input safeguards, honest unavailable/failed states (no fake vectors; pgvector optional later)
+- ✅ End-to-end workflow & demo readiness (Step 15): canonical workflow verified upload→…→audit trail, provenance chain continuity, AI state honesty (insufficient/unavailable/error/injection-safe), demo fixture aligned with current schema, AI Query page grounding the last placeholder route, DB-free hardening tests + DB-dependent E2E test
 - ✅ Production dashboard (Step 14): read-only `GET /api/dashboard/summary` + `/statuses` — honest health statuses (CONNECTED/OPERATIONAL/DEGRADED/NOT CONFIGURED/UNAVAILABLE), live source-of-truth metrics, metadata-only recents, intelligence availability, module entry points, offline state that never fabricates zeroes
 - ✅ Document & topic intelligence foundation (Step 13): bounded knowledge-index corpus, deterministic TF-IDF keywords/phrases, co-occurrence topics with derived labels, word-cloud data, topic↔document relationships, deterministic summaries + optional labeled AI summary, intelligence APIs and Topic Intelligence page with search deep-links
 - ✅ Report intelligence & visualization foundation (Step 12): deterministic KPI/trend/comparison/distribution engines with conflict-aware exclusions, descriptive-only insights, frontend-friendly chart DATA specs, Report Generator page (KPI cards, SVG charts, conflict indicators), optional labeled AI narrative with deterministic fallback, `POST /api/reports/analyze`
