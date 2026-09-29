@@ -1,5 +1,5 @@
 import { apiBaseUrl } from "@/lib/env";
-import { ApiError } from "@/lib/api";
+import { ApiError, networkError } from "@/lib/api";
 import type { AuditLogListResponse } from "@/types/audit";
 
 /** Audit trail client — read-only. */
@@ -12,7 +12,7 @@ async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
       signal,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) {
     let message = `Request failed with status ${response.status}.`;

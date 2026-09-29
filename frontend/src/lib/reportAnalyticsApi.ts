@@ -5,7 +5,7 @@
  */
 
 import { apiBaseUrl } from "@/lib/env";
-import { ApiError } from "@/lib/api";
+import { ApiError, networkError } from "@/lib/api";
 import type { AnalyzeRequest, AnalyzeResponse } from "@/types/reportAnalytics";
 
 async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -18,7 +18,7 @@ async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promi
       signal,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) {
     let message = `Request failed with status ${response.status}.`;
@@ -50,7 +50,7 @@ export async function generateReportDocx(request: AnalyzeRequest, signal?: Abort
       signal,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) {
     let message = `Report generation failed with status ${response.status}.`;

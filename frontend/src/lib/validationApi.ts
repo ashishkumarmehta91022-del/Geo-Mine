@@ -1,5 +1,5 @@
 import { apiBaseUrl } from "@/lib/env";
-import { ApiError } from "@/lib/api";
+import { ApiError, networkError } from "@/lib/api";
 import type {
   ReviewQueueResponse,
   ValidationDocumentResponse,
@@ -28,7 +28,7 @@ async function request<T>(path: string, init?: RequestInit, signal?: AbortSignal
       ...init,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as T;

@@ -4,7 +4,7 @@
  */
 
 import { apiBaseUrl } from "@/lib/env";
-import { ApiError } from "@/lib/api";
+import { ApiError, networkError } from "@/lib/api";
 import type { DashboardStatuses, DashboardSummary } from "@/types/dashboard";
 
 export async function fetchDashboardSummary(signal?: AbortSignal): Promise<DashboardSummary> {
@@ -15,7 +15,7 @@ export async function fetchDashboardSummary(signal?: AbortSignal): Promise<Dashb
       headers: { Accept: "application/json" },
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) {
     let message = `Dashboard request failed with status ${response.status}.`;
@@ -39,7 +39,7 @@ export async function fetchDashboardStatuses(signal?: AbortSignal): Promise<Dash
       headers: { Accept: "application/json" },
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) {
     throw new ApiError(`Status request failed with status ${response.status}.`, response.status);

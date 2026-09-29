@@ -1,5 +1,5 @@
 import { apiBaseUrl } from "@/lib/env";
-import { ApiError } from "@/lib/api";
+import { ApiError, networkError } from "@/lib/api";
 import type { RecordListResponse } from "@/types/records";
 
 /** Structured-record (Data Explorer) client — exact-match filters only. */
@@ -31,7 +31,7 @@ export async function listRecords(
       headers: { Accept: "application/json" },
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) {
     let message = `Request failed with status ${response.status}.`;

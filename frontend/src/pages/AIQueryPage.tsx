@@ -6,6 +6,7 @@ import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 import { useToast } from "@/components/ui/Toast";
 import { fetchDashboardStatuses } from "@/lib/dashboardApi";
+import { networkError } from "@/lib/api";
 import { apiBaseUrl } from "@/lib/env";
 import type { AIQueryResponse } from "@/types/aiQuery";
 import type { DashboardStatuses } from "@/types/dashboard";
@@ -100,11 +101,16 @@ export default function AIQueryPage() {
       setError(null);
       setLlmNotConfigured(false);
       try {
-        const response = await fetch(`${apiBaseUrl()}/api/ai/query`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({ question: trimmed, mode }),
-        });
+        let response: Response;
+        try {
+          response = await fetch(`${apiBaseUrl()}/api/ai/query`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ question: trimmed, mode }),
+          });
+        } catch {
+          throw networkError();
+        }
         if (!response.ok) {
           let message = `AI query failed with status ${response.status}.`;
           let code: string | null = null;

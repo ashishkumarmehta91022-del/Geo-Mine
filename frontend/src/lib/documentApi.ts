@@ -1,5 +1,5 @@
 import { apiBaseUrl } from "@/lib/env";
-import { ApiError } from "@/lib/api";
+import { ApiError, networkError } from "@/lib/api";
 import type {
   DocumentContent,
   DocumentListResponse,
@@ -42,7 +42,7 @@ export async function uploadDocument(
       signal,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as DocumentRecord;
@@ -60,7 +60,7 @@ export async function listDocuments(
       { signal, headers: { Accept: "application/json" } },
     );
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as DocumentListResponse;
@@ -77,7 +77,7 @@ export async function deleteDocument(
       signal,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
 }
@@ -97,7 +97,7 @@ export async function processDocument(
       signal,
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as ProcessingStatus;
@@ -114,7 +114,7 @@ export async function fetchProcessingStatus(
       headers: { Accept: "application/json" },
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as ProcessingStatus;
@@ -131,7 +131,7 @@ export async function fetchDocumentContent(
       headers: { Accept: "application/json" },
     });
   } catch {
-    throw new ApiError("Cannot reach the API server. Is the backend running?");
+    throw networkError();
   }
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as DocumentContent;
