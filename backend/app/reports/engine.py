@@ -295,7 +295,10 @@ def collect_report_data(db: Session, specification: ReportSpecification) -> Repo
                 reporting_period=row.reporting_period,
                 extraction_method=row.extraction_method,
                 validation_status=row.validation_status,
-                ocr_confidence=float(row.ocr_confidence) if row.ocr_confidence is not None else None,
+                # ExtractedRecord carries a single extraction confidence
+                # (Numeric 5,4); OCR-derived confidence lives on
+                # document_pages.ocr metadata, not on records.
+                ocr_confidence=None,
                 confidence=float(row.confidence) if row.confidence is not None else None,
             )
             for row in rows

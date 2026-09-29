@@ -38,6 +38,7 @@ class KnowledgeIndex(Base):
     validation_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # page | record | validation (constants.RetrievalUnitType).
     unit_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    unit: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)  # unit of measure (embedding context)
     title: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_reference: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)

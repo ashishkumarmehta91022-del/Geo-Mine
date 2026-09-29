@@ -19,7 +19,26 @@ export type IconName =
   | "close"
   | "refresh"
   | "status"
-  | "search";
+  | "search"
+  | "ok"
+  | "info"
+  | "upload"
+  | "database"
+  | "chip"
+  | "bolt"
+  | "shield"
+  | "link"
+  | "download"
+  | "eye"
+  | "external"
+  | "chevron-right"
+  | "chevron-down"
+  | "filter"
+  | "clock"
+  | "layers"
+  | "target"
+  | "trend"
+  | "warn";
 
 const ICON_PATHS: Record<IconName, ReactNode> = {
   dashboard: (
@@ -120,6 +139,110 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="11" cy="11" r="7" />
       <path d="m21 21-4.35-4.35" />
+    </>
+  ),
+  ok: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m8.5 12.2 2.4 2.4 4.6-4.9" />
+    </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8h.01" />
+      <path d="M12 11v5" />
+    </>
+  ),
+  upload: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 9 5-5 5 5" />
+      <path d="M12 4v12" />
+    </>
+  ),
+  database: (
+    <>
+      <ellipse cx="12" cy="5" rx="8" ry="3" />
+      <path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+      <path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3" />
+    </>
+  ),
+  chip: (
+    <>
+      <rect x="6" y="6" width="12" height="12" rx="1" />
+      <path d="M9 2v4" />
+      <path d="M15 2v4" />
+      <path d="M9 18v4" />
+      <path d="M15 18v4" />
+      <path d="M2 9h4" />
+      <path d="M2 15h4" />
+      <path d="M18 9h4" />
+      <path d="M18 15h4" />
+    </>
+  ),
+  bolt: <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />,
+  shield: <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+  link: (
+    <>
+      <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.8 1.7" />
+      <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.8-1.7" />
+    </>
+  ),
+  download: (
+    <>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="m7 10 5 5 5-5" />
+      <path d="M12 15V3" />
+    </>
+  ),
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  external: (
+    <>
+      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      <path d="M15 3h6v6" />
+      <path d="M10 14 21 3" />
+    </>
+  ),
+  "chevron-right": <path d="m9 18 6-6-6-6" />,
+  "chevron-down": <path d="m6 9 6 6 6-6" />,
+  filter: <path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z" />,
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  layers: (
+    <>
+      <path d="m12 2 9 5-9 5-9-5 9-5z" />
+      <path d="m3 12 9 5 9-5" />
+      <path d="m3 17 9 5 9-5" />
+    </>
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1" />
+    </>
+  ),
+  trend: (
+    <>
+      <path d="m3 17 6-6 4 4 8-8" />
+      <path d="M15 7h6v6" />
+    </>
+  ),
+  warn: (
+    <>
+      <path d="M12 3 2 20h20L12 3z" />
+      <path d="M12 10v4" />
+      <path d="M12 17h.01" />
     </>
   ),
 };

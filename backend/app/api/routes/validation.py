@@ -65,6 +65,14 @@ def review_queue_route(
     for row in data["rows"]:
         record = data["records"].get(row.extracted_record_id) if row.extracted_record_id else None
         confidence = float(record.confidence) if record and record.confidence is not None else None
+        if confidence is None:
+            # Page-level OCR results have no linked record; their confidence
+            # lives in the persisted outcome details (provenance-complete).
+            details = row.details if isinstance(row.details, dict) else {}
+            candidate_details = details.get("candidate") if isinstance(details.get("candidate"), dict) else {}
+            raw_confidence = candidate_details.get("confidence")
+            if raw_confidence is not None:
+                confidence = float(raw_confidence)
         items.append(_to_item(row, data["filenames"].get(row.document_id), confidence))
     return ReviewQueueResponse(
         page=page,

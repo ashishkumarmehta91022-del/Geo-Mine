@@ -90,7 +90,7 @@ def test_summary_intelligence_available_with_indexed_content(client, migrated_en
             extraction_status="extracted", processing_status="completed",
         ))
         session.commit()
-    knowledge_service.index_document(migrated_engine, document_id)
+    knowledge_service.index_document(Session(migrated_engine), document_id)
     payload = client.get("/api/dashboard/summary").json()
     assert payload["intelligence"]["available"] is True
     assert payload["intelligence"]["indexed_documents"] == 1
@@ -101,6 +101,7 @@ def test_summary_intelligence_available_with_indexed_content(client, migrated_en
 
 def test_summary_writes_metadata_only_audit_row(client, migrated_engine):
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
 
     from app.models import AuditLog
 

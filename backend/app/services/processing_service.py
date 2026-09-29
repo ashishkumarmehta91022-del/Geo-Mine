@@ -175,6 +175,16 @@ def _persist_derived_data(
             db.add(
                 ExtractedRecord(
                     document_id=document.id,
+                    # Deterministic classification from the metric category
+                    # (same convention as scripts/seed_demo_data.py:
+                    # metric DEMO_COAL_PRODUCTION → record_type coal_production).
+                    record_type=(
+                        (draft.metric_name or "unknown_metric")
+                        .lower()
+                        .removeprefix("demo_")
+                        .removeprefix("DEMO_")
+                    )[:64]
+                    or "unknown",
                     entity_name=draft.entity_name,
                     metric_name=draft.metric_name,
                     metric_value=draft.numeric_value,

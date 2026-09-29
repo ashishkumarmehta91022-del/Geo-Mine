@@ -357,7 +357,12 @@ class CrossDocumentConsistencyRule(ValidationRule):
                                     "document_id": c.document_id,
                                     "record_id": c.record_id,
                                     "source_reference": c.source_reference,
-                                    "value": str(c.numeric_value),
+                                    # Human-canonical numeric text ('1200', not
+                                    # Decimal's padded '1200.0000').
+                                    "value": (
+                                        c.raw_value
+                                        or format(c.numeric_value, "f").rstrip("0").rstrip(".")
+                                    ),
                                     "document_filename": c.document_filename,
                                 }
                                 for c in (anchor, other)

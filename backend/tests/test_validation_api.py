@@ -88,7 +88,9 @@ def test_missing_required_field_creates_result_and_marks_record(client, migrated
         ],
     )
     summary = _run(client, document_id).json()
-    assert summary["warnings"] >= 1  # period is a demo warning-severity field
+    # Missing period → REQUIRED_FIELD_MISSING with status=ERROR (the rule's
+    # severity is 'warning' — how loud — while the outcome status is error).
+    assert summary["errors"] >= 1
 
     stored = client.get(f"/api/validation/{document_id}").json()
     assert stored["summary"]["total_checks"] == summary["total_checks"]
@@ -225,10 +227,20 @@ def test_cross_document_conflict_flags_review_and_preserves_both(client, migrate
     assert all(v["source_reference"] for v in values)
     assert "No winner selected" in conflict["message"]
 
-    # Second document shows the same conflict from its own run.
+    # Re-running from B's perspective stores the single group-level conflict
+    # under the pair's anchor document (lowest id) — never duplicated per
+    # side; reviewers see it globally in the review queue either way.
     _run(client, doc_b)
-    stored_b = client.get(f"/api/validation/{doc_b}").json()
-    assert any(i["rule_code"] == "CROSS_DOCUMENT_CONFLICT" for i in stored_b["items"])
+    stored_anchor = client.get(f"/api/validation/{min(doc_a, doc_b)}").json()
+    assert any(
+        i["rule_code"] == "CROSS_DOCUMENT_CONFLICT"
+        for i in stored_anchor["items"]
+    )
+    queue = client.get("/api/validation/review-queue").json()
+    assert any(
+        i["rule_code"] == "CROSS_DOCUMENT_CONFLICT" and i["status"] == "review_required"
+        for i in queue["items"]
+    )
 
 
 def test_duplicate_records_flagged_not_deleted(client, migrated_engine):
@@ -294,6 +306,9 @@ def test_rerunning_validation_replaces_results_without_duplicates(client, migrat
 
 
 def test_review_patch_updates_status_only(client, migrated_engine):
+    """A flagged (rule-violating) record can be reviewed: status changes,
+    the original value is untouched. A fully valid record produces NO
+    results at all (violations only) — hence the negative value here."""
     document_id = _make_document_with_records(
         migrated_engine,
         "review.xlsx",
@@ -302,7 +317,7 @@ def test_review_patch_updates_status_only(client, migrated_engine):
                 record_type="coal_production",
                 entity_name="DEMO_MINE_A",
                 metric_name="DEMO_COAL_PRODUCTION",
-                metric_value=1200,
+                metric_value=-50,  # demo rule: negatives not allowed → flagged
                 reporting_period="2025-06-30",
             )
         ],
@@ -340,7 +355,7 @@ def test_review_patch_rejects_invalid_status(client, migrated_engine):
                 record_type="coal_production",
                 entity_name="DEMO_MINE_A",
                 metric_name="DEMO_COAL_PRODUCTION",
-                metric_value=1200,
+                metric_value=-50,  # flagged so a review item exists to PATCH
                 reporting_period="2025-06-30",
             )
         ],

@@ -57,7 +57,16 @@ def generate_report_route(
     try:
         # "json" selects the RESPONSE representation (metadata only); the
         # generated artifact itself is always DOCX in this foundation.
-        json_mode = (payload.output_format or "docx").strip().lower() == "json"
+        # Anything other than docx/json (e.g. "pdf") is rejected 422 —
+        # unverified formats are never silently coerced to docx.
+        requested_format = (payload.output_format or "docx").strip().lower()
+        if requested_format not in {"docx", "json"}:
+            raise AppError(
+                status_code=422,
+                code="unsupported_report_format",
+                message="output_format must be 'docx' or 'json' (PDF is not offered).",
+            )
+        json_mode = requested_format == "json"
         specification = build_specification(
             title=payload.title,
             report_type=payload.report_type,

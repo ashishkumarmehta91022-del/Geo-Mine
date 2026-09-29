@@ -4,6 +4,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CMPDI AI Reporting Platform</title>
+    <script>
+      // Apply the saved (or system) theme before first paint — prevents a
+      // flash of the wrong theme on reload. Priority: saved → system → light.
+      (function () {
+        try {
+          var saved = localStorage.getItem("cmpdi-theme");
+          var dark =
+            saved === "dark" ||
+            (saved !== "light" &&
+              window.matchMedia &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          /* default to light */
+        }
+      })();
+    </script>
   </head>
   <body class="h-full">
     <div id="root" class="h-full"></div>

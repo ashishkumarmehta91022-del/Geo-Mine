@@ -44,7 +44,7 @@ def test_process_text_pdf_end_to_end(client, migrated_engine, tmp_path):
     payload = result.json()
     assert payload["status"] == "processed"
     assert payload["processed_at"] is not None
-    assert payload["extractor"]["name"] == "pymupdf"
+    assert payload["extractor"]["name"] == "pymupdf+ocr"  # Step 5 name (per-page native/OCR dispatch)
     assert payload["extractor"]["version"] not in ("", None)
     assert payload["statistics"]["extracted"] == 2
     assert payload["statistics"]["total_units"] == 2
@@ -61,7 +61,9 @@ def test_process_text_pdf_end_to_end(client, migrated_engine, tmp_path):
         ).all()
     assert [r[0] for r in rows] == [1, 2]
     assert all(r[1] == "extracted" for r in rows)
-    assert all(r[2] == "pymupdf" for r in rows)
+    # Step 5's per-page dispatch keeps the document-level engine name on
+    # every page row (native text pages included).
+    assert all(r[2] == "pymupdf+ocr" for r in rows)
 
 
 def test_process_scan_style_pdf_reports_no_text(client):
@@ -114,8 +116,11 @@ def test_process_image_marks_ocr_required(client):
     payload = _process(client, body["id"]).json()
 
     assert payload["status"] == "processed"
-    assert payload["extraction_status"] == "ocr_required"
-    assert payload["statistics"]["ocr_required"] == 1
+    # With the OCR engine available (model cached), a blank synthetic image
+    # honestly reports no_text — the engine ran and found nothing. The
+    # ocr_required branch (engine unavailable) is covered in test_extractors.
+    assert payload["extraction_status"] == "no_text"
+    assert payload["statistics"]["no_text"] == 1
 
     content_response = client.get(f"/api/documents/{body['id']}/content").json()
     section = content_response["sections"][0]

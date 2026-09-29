@@ -38,12 +38,27 @@ logger = logging.getLogger(__name__)
 _CROSS_DOCUMENT_RULES = (DuplicateRule, CrossDocumentConsistencyRule)
 
 
+def _canonical_decimal_str(value) -> str | None:
+    """Human-canonical numeric text ('1200', not Decimal's '1200.0000')."""
+    if value is None:
+        return None
+    text_value = format(value, "f")
+    if "." in text_value:
+        text_value = text_value.rstrip("0").rstrip(".")
+    return text_value or "0"
+
+
 def _record_candidate(record: ExtractedRecord, filename: str | None) -> ValueCandidate:
     """ValueCandidate from an extracted_records row (verbatim values)."""
     return ValueCandidate(
         document_id=record.document_id,
         metric_name=record.metric_name,
-        raw_value=str(record.metric_value) if record.metric_value is not None else None,
+        # Verbatim extracted text first (true provenance); canonical decimal
+        # text as fallback — never Decimal's padded repr ('1200.0000').
+        raw_value=(
+            record.value_raw
+            or _canonical_decimal_str(record.metric_value)
+        ),
         numeric_value=record.metric_value,
         record_id=record.id,
         page_id=record.page_id,

@@ -66,7 +66,9 @@ def test_generate_json_mode_returns_metadata(client, migrated_engine):
     assert report["status"] == "ok"
     assert report["evidence_count"] == 1
     assert report["conflict_count"] == 0
-    assert report["artifact"]["format"] == "json"
+    # output_format:"json" selects the RESPONSE representation; the artifact
+    # itself is always DOCX (the only verified format — PDF is never offered).
+    assert report["artifact"]["format"] == "docx"
     assert report["artifact"]["filename"].endswith(".docx")
     assert report["specification"]["title"] == "Integration Production Report"
 
@@ -133,6 +135,8 @@ def test_generate_empty_store_is_honest_not_error(client):
 
 
 def test_generate_rejects_invalid_spec_with_422(client):
+    # "json" is the only non-DOCX value and it selects the response format;
+    # anything else (e.g. "pdf") is rejected — PDF is deliberately unoffered.
     response = _generate(client, {"output_format": "pdf"})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "unsupported_report_format"

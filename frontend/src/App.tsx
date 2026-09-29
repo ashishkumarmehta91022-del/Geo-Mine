@@ -1,41 +1,42 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "@/components/layout/AppLayout";
-import { NAV_ITEMS } from "@/components/layout/navigation";
 import DashboardPage from "@/pages/DashboardPage";
 import DataExplorerPage from "@/pages/DataExplorerPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import AIQueryPage from "@/pages/AIQueryPage";
+import AuditLogsPage from "@/pages/AuditLogsPage";
 import KnowledgePage from "@/pages/KnowledgePage";
-import PlaceholderPage from "@/pages/PlaceholderPage";
+import NotFoundPage from "@/pages/NotFoundPage";
 import ReportGeneratorPage from "@/pages/ReportGeneratorPage";
+import ReviewQueuePage from "@/pages/ReviewQueuePage";
+import SettingsPage from "@/pages/SettingsPage";
 import TopicIntelligencePage from "@/pages/TopicIntelligencePage";
 import ValidationPage from "@/pages/ValidationPage";
 
+/** Every sidebar destination is a real, working page — no placeholders. */
 export default function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        {/* Live page (Step 1) */}
+        {/* Overview */}
         <Route path="/dashboard" element={<DashboardPage />} />
-        {/* Live pages (Steps 3–8) */}
+        {/* Data */}
         <Route path="/documents" element={<DocumentsPage />} />
         <Route path="/data-explorer" element={<DataExplorerPage />} />
         <Route path="/knowledge" element={<KnowledgePage />} />
-        <Route path="/validation" element={<ValidationPage />} />
-        {/* Live page (Step 12) */}
-        <Route path="/report-generator" element={<ReportGeneratorPage />} />
-        {/* Live page (Step 13) */}
-        <Route path="/topic-intelligence" element={<TopicIntelligencePage />} />
-        {/* Live page (Step 15): grounds the dashboard's AI Query entry point */}
+        {/* Intelligence */}
         <Route path="/ai-query" element={<AIQueryPage />} />
-        {/* Placeholder pages for modules implemented in later steps */}
-        {NAV_ITEMS.filter(
-          (item) => !["/dashboard", "/documents", "/data-explorer", "/knowledge", "/validation", "/report-generator", "/topic-intelligence", "/ai-query"].includes(item.path),
-        ).map((item) => (
-          <Route key={item.path} path={item.path} element={<PlaceholderPage />} />
-        ))}
-        <Route path="*" element={<PlaceholderPage />} />
+        <Route path="/topic-intelligence" element={<TopicIntelligencePage />} />
+        <Route path="/report-generator" element={<ReportGeneratorPage />} />
+        {/* Quality & governance */}
+        <Route path="/validation" element={<ValidationPage />} />
+        <Route path="/review-queue" element={<ReviewQueuePage />} />
+        <Route path="/audit-logs" element={<AuditLogsPage />} />
+        {/* System */}
+        <Route path="/settings" element={<SettingsPage />} />
+        {/* Unknown routes */}
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
   );

@@ -145,6 +145,7 @@ def seed() -> None:
                 rule_code="range_check",  # Step 6: validation_type renamed to rule_code
                 status="pass",
                 severity="info",
+                review_status="resolved",  # a passing check needs no human review
                 message="DEMO value within expected development range.",
                 original_value="1234.5678",   # Step 6: original_value (was actual_value)
                 expected_value="0 .. 100000",

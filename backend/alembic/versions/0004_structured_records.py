@@ -27,9 +27,12 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("extracted_records", sa.Column("value_raw", sa.Text(), nullable=True))
     op.add_column("extracted_records", sa.Column("normalized_value", sa.String(length=256), nullable=True))
+    # nullable to match the ORM model (knowledge_index.extraction_method is
+    # nullable too); the pipeline always sets it, but direct ORM inserts may
+    # legitimately omit it. Server default keeps legacy rows populated.
     op.add_column(
         "extracted_records",
-        sa.Column("extraction_method", sa.String(length=32), nullable=False, server_default="native_text"),
+        sa.Column("extraction_method", sa.String(length=32), nullable=True, server_default="native_text"),
     )
     op.add_column("extracted_records", sa.Column("record_metadata", postgresql.JSONB(), nullable=True))
     op.create_index("ix_extracted_records_extraction_method", "extracted_records", ["extraction_method"])

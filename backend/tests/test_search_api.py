@@ -242,7 +242,14 @@ def test_processing_three_times_keeps_single_index_representation(client, migrat
         record_count = conn.execute(
             text("SELECT count(*) FROM extracted_records WHERE document_id = :id"), {"id": document_id}
         ).scalar()
-    assert index_count == record_count  # one current representation, no stale entries
+        page_count = conn.execute(
+            text("SELECT count(*) FROM document_pages WHERE document_id = :id"), {"id": document_id}
+        ).scalar()
+    # Step 8 design: the index composes pages + records (+ validations) for
+    # the document — provenance-complete, one current representation.
+    assert index_count >= record_count
+    assert index_count >= page_count
+    assert index_count == page_count + record_count  # no stale/extra entries
 
 
 def test_document_deletion_removes_index_entries(client, migrated_engine):

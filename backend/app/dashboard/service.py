@@ -359,15 +359,23 @@ def build_dashboard_summary(db: Session) -> dict[str, Any]:
 
 def audit_metadata(payload: dict[str, Any]) -> dict[str, Any]:
     """Safe audit metadata — counts only, never document contents."""
+
+    def _field(section: Any, key: str) -> Any:
+        # Sections may be dicts (offline payload) or pydantic models
+        # (connected payload) — read the same key from either, or None.
+        if isinstance(section, dict):
+            return section.get(key)
+        return getattr(section, key, None)
+
     return {
         "data_available": payload.get("data_available"),
-        "document_total": (payload.get("documents") or {}).get("total"),
-        "record_total": (payload.get("records") or {}).get("total"),
-        "validation_review_required": (payload.get("validation") or {}).get(
-            "review_required"
+        "document_total": _field(payload.get("documents"), "total"),
+        "record_total": _field(payload.get("records"), "total"),
+        "validation_review_required": _field(
+            payload.get("validation"), "review_required"
         ),
-        "intelligence_available": (payload.get("intelligence") or {}).get(
-            "available"
+        "intelligence_available": _field(
+            payload.get("intelligence"), "available"
         ),
         "recent_document_count": len(payload.get("recent_documents", []) or []),
         "recent_activity_count": len(payload.get("recent_activity", []) or []),

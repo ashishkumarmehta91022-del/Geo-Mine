@@ -101,6 +101,37 @@ def test_generate_completion_success_returns_completion():
     assert "[MOCK LLM]" in completion.text
 
 
+def test_mock_provider_parses_citation_ids_from_realistic_prompt():
+    """Regression: a realistic prompt with [id] evidence tokens must not crash.
+
+    The mock provider used to raise ValueError on every prompt containing
+    bracketed citation ids, which the AI route then surfaced as an honest-but
+    -wrong llm_unavailable 503 even though the provider was configured.
+    """
+    import json as _json
+
+    set_llm_provider(MockLLMProvider())
+    completion, error, _ = generate_completion(
+        [
+            {
+                "role": "user",
+                "content": (
+                    "<evidence>\n"
+                    "[1] (x.xlsx, record 4) coal_production=1200 KT\n"
+                    "[10] (borehole.pdf, p. 3) Gamma=830 CPS\n"
+                    "plain number 2025 with no brackets must not be captured\n"
+                    "</evidence>"
+                ),
+            }
+        ],
+        _config(),
+    )
+    assert error is None
+    payload = _json.loads(completion.text)
+    assert payload["evidence_ids"] == [1, 10]
+    assert "[MOCK LLM]" in payload["answer"]
+
+
 def test_generate_completion_provider_failure_is_secret_free():
     set_llm_provider(_BrokenProvider())
     completion, error, _ = generate_completion(

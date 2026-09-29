@@ -10,6 +10,7 @@ no randomness anywhere.
 """
 
 import json
+import re
 
 from app.llm.base import LLMCompletion, LLMProvider
 
@@ -42,7 +43,9 @@ class MockLLMProvider(LLMProvider):
         # Ground the answer only on what the prompt actually contained.
         user_content = next((m.get("content", "") for m in messages if m.get("role") == "user"), "")
         conflict_seen = "CONFLICT:" in user_content
-        cited_ids = sorted({int(tok[1:]) for tok in user_content.split() if tok.startswith("[") and tok[1:].rstrip("]").isdigit()})
+        cited_ids = sorted(
+            {int(m.group(1)) for m in re.finditer(r"\[(\d+)\]", user_content)}
+        )
 
         payload = {
             "answer": (

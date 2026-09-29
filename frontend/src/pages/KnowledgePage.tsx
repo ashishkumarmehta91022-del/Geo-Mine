@@ -2,41 +2,214 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import PageHeader from "@/components/ui/PageHeader";
 import StateBlock from "@/components/ui/StateBlock";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/Icon";
 import { fetchKnowledgeStats, searchKnowledge } from "@/lib/searchApi";
 import type { KnowledgeStats, RetrievalMode, SearchResponse, SearchResultItem } from "@/types/search";
 
 const RETRIEVAL_MODES: RetrievalMode[] = ["lexical", "semantic", "hybrid"];
 
+const MODE_EXPLANATIONS: Record<RetrievalMode, string> = {
+  lexical: "Matches source text and exact terms.",
+  semantic: "Finds conceptually similar content.",
+  hybrid: "Combines lexical and semantic relevance.",
+};
+
 const inputClass =
   "w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none";
 
-function unitBadge(type: string): string {
+function unitTone(type: string): BadgeTone {
   switch (type) {
     case "record":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      return "ok";
     case "page":
-      return "bg-blue-50 text-blue-700 border-blue-200";
+      return "info";
     case "validation":
-      return "bg-purple-50 text-purple-700 border-purple-200";
+      return "review";
     default:
-      return "bg-gray-100 text-gray-600 border-gray-200";
+      return "neutral";
   }
 }
 
-function validationBadge(status: string | null): string {
+function validationTone(status: string | null): BadgeTone {
   switch (status) {
     case "pass":
     case "valid":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      return "ok";
     case "warning":
+      return "warn";
     case "review_required":
-      return "bg-amber-50 text-amber-700 border-amber-200";
+      return "review";
     case "error":
     case "failed":
-      return "bg-red-50 text-red-700 border-red-200";
+      return "bad";
     default:
-      return "bg-gray-100 text-gray-600 border-gray-200";
+      return "neutral";
   }
+}
+
+/** One search result rendered as a traceable evidence card. */
+function ResultCard({ item }: { item: SearchResultItem }) {
+  const [expanded, setExpanded] = useState(false);
+  const chain: { label: string; id: number | null }[] = [
+    { label: `Document #${item.document_id}`, id: item.document_id },
+    ...(item.page_id !== null && item.page_id !== undefined
+      ? [{ label: `Page #${item.page_id}`, id: item.page_id }]
+      : []),
+    ...(item.record_id !== null && item.record_id !== undefined
+      ? [{ label: `Record #${item.record_id}`, id: item.record_id }]
+      : []),
+    ...(item.validation_id !== null && item.validation_id !== undefined
+      ? [{ label: `Validation #${item.validation_id}`, id: item.validation_id }]
+      : []),
+  ];
+
+  return (
+    <article className="card p-4 transition-shadow hover:shadow-md">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone={unitTone(item.unit_type)}>{item.unit_type}</Badge>
+        {item.validation_status && (
+          <Badge tone={validationTone(item.validation_status)}>
+            {item.validation_status.split("_").join(" ")}
+          </Badge>
+        )}
+        {item.extraction_method && (
+          <span className="text-[10px] uppercase tracking-wide text-gray-400">
+            via {item.extraction_method.split("_").join(" ")}
+          </span>
+        )}
+        {typeof item.ocr_confidence === "number" && (
+          <span className="text-[10px] text-gray-400">OCR {Math.round(item.ocr_confidence * 100)}%</span>
+        )}
+        {/* Scores: retrieval metrics only — never presented as trust. */}
+        {(typeof item.rank_score === "number" ||
+          typeof item.semantic_similarity === "number" ||
+          typeof item.relevance === "number") && (
+          <span className="ml-auto flex gap-2">
+            {typeof item.rank_score === "number" && (
+              <span
+                className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500"
+                title="Deterministic lexical relevance — retrieval metric, not a trust score"
+              >
+                lexical {item.rank_score.toFixed(2)}
+              </span>
+            )}
+            {typeof item.semantic_similarity === "number" && (
+              <span
+                className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-500"
+                title="Cosine similarity — retrieval metric, never truth or trust"
+              >
+                semantic {item.semantic_similarity.toFixed(3)}
+              </span>
+            )}
+            {typeof item.relevance === "number" && (
+              <span
+                className="rounded border border-brand-200 bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold text-brand-700"
+                title="Combined hybrid relevance (explicit weighted formula) — retrieval metric, not a trust score"
+              >
+                relevance {item.relevance.toFixed(3)}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-1.5 text-sm font-semibold text-gray-900">
+        {item.document_name ?? `Document #${item.document_id}`}
+        {item.page_number ? ` · page ${item.page_number}` : ""}
+      </p>
+      {item.title && <p className="text-xs text-gray-500">{item.title}</p>}
+      {item.snippet && (
+        <p className="mt-1.5 break-words rounded bg-slate-50 px-2.5 py-1.5 font-mono text-xs text-gray-700">
+          {item.snippet}
+        </p>
+      )}
+
+      {(item.entity || item.metric || item.value_raw) && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+          {item.entity && (
+            <span>
+              entity: <span className="font-medium text-gray-800">{item.entity}</span>
+            </span>
+          )}
+          {item.metric && <span>metric: <span className="font-mono">{item.metric}</span></span>}
+          {item.value_raw && (
+            <span>
+              value: <span className="font-mono text-gray-800">{item.value_raw}</span>
+              {item.normalized_value && item.normalized_value !== item.value_raw && (
+                <span className="text-gray-400"> → {item.normalized_value}</span>
+              )}
+            </span>
+          )}
+          {item.unit && <span>unit: {item.unit}</span>}
+          {item.reporting_period && <span>period: {item.reporting_period}</span>}
+        </div>
+      )}
+
+      {/* Provenance chain — the core traceability guarantee, visually explicit */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-gray-100 pt-2.5">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Provenance</span>
+        {chain.map((node, i) => (
+          <span key={node.label} className="flex items-center gap-1.5">
+            {i > 0 && <Icon name="chevron-right" className="h-3 w-3 text-gray-300" aria-hidden="true" />}
+            <span className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">
+              {node.label}
+            </span>
+          </span>
+        ))}
+        {item.source_reference && (
+          <span className="max-w-[240px] truncate text-[11px] text-gray-500" title={item.source_reference}>
+            — {item.source_reference}
+          </span>
+        )}
+        <button
+          type="button"
+          className="btn-ghost ml-auto !px-2 !py-0.5 text-[11px]"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+        >
+          {expanded ? "Hide evidence" : "View evidence"}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 grid gap-x-6 gap-y-1.5 rounded bg-slate-50 p-3 text-[11px] sm:grid-cols-2">
+          <p>
+            <span className="font-semibold text-gray-500">Document:</span>{" "}
+            <span className="text-gray-700">
+              {item.document_name ?? "—"} (#{item.document_id})
+            </span>
+          </p>
+          <p>
+            <span className="font-semibold text-gray-500">Page:</span>{" "}
+            <span className="text-gray-700">
+              {item.page_number ?? "—"}
+              {item.page_id ? ` (id ${item.page_id})` : ""}
+            </span>
+          </p>
+          <p>
+            <span className="font-semibold text-gray-500">Record:</span>{" "}
+            <span className="text-gray-700">{item.record_id ?? "—"}</span>
+          </p>
+          <p>
+            <span className="font-semibold text-gray-500">Validation:</span>{" "}
+            <span className="text-gray-700">
+              {item.validation_status ?? "—"}
+              {item.validation_id ? ` (id ${item.validation_id})` : ""}
+            </span>
+          </p>
+          <p>
+            <span className="font-semibold text-gray-500">Source reference:</span>{" "}
+            <span className="break-all text-gray-700">{item.source_reference ?? "—"}</span>
+          </p>
+          <p>
+            <span className="font-semibold text-gray-500">Extraction method:</span>{" "}
+            <span className="text-gray-700">{item.extraction_method?.split("_").join(" ") ?? "—"}</span>
+          </p>
+        </div>
+      )}
+    </article>
+  );
 }
 
 /** Knowledge / Search page (Step 8 lexical + Step 9 semantic/hybrid modes). */
@@ -134,6 +307,16 @@ export default function KnowledgePage() {
     runSearch(queryInput, filters, 0, mode);
   };
 
+  const clearSearch = () => {
+    setQueryInput("");
+    setResults(null);
+    setLastResponse(null);
+    setTotal(0);
+    setOffset(0);
+    setIsError(false);
+    setError(null);
+  };
+
   const changeMode = (next: RetrievalMode) => {
     setMode(next);
     if (results === null) return; // no search yet — mode applies on next submit
@@ -149,7 +332,7 @@ export default function KnowledgePage() {
     <>
       <PageHeader
         title="Knowledge Search"
-        description="Deterministic search over documents, structured records and validation results — every result links back to its source"
+        description="Search across validated geological, mining and production knowledge with source-level traceability."
       />
 
       {/* Index statistics (actual DB values) */}
@@ -196,42 +379,60 @@ export default function KnowledgePage() {
         )}
       </section>
 
-      {/* Search form */}
-      <section aria-label="Search" className="card mb-6 p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-2" role="group" aria-label="Retrieval mode">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Mode</span>
-          {RETRIEVAL_MODES.map((m) => (
-            <button
-              key={m}
-              type="button"
-              aria-pressed={mode === m}
-              onClick={() => changeMode(m)}
-              className={`rounded-md border px-2.5 py-1 text-xs font-semibold capitalize transition-colors ${
-                mode === m
-                  ? "border-brand-500 bg-brand-50 text-brand-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-              }`}
-            >
-              {m}
-            </button>
-          ))}
-          {mode !== "lexical" && (
-            <span className="text-[11px] text-gray-400">matches meaning, not just keywords — requires a text query</span>
-          )}
-        </div>
+      {/* Search form — the primary visual focus */}
+      <section aria-label="Search" className="card mb-6 p-5">
         <div className="flex flex-col gap-3 sm:flex-row">
-          <input
-            className={`${inputClass} flex-1`}
-            placeholder='Search… use "quotes" for exact phrases'
-            value={queryInput}
-            onChange={(e) => setQueryInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-          />
+          <div className="relative flex-1">
+            <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4.5 w-4.5 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            <input
+              className={`${inputClass} !py-2.5 pl-10 text-base`}
+              placeholder='Search… use "quotes" for exact phrases'
+              aria-label="Search query"
+              value={queryInput}
+              onChange={(e) => setQueryInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+            />
+            {queryInput && (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                onClick={clearSearch}
+                aria-label="Clear search"
+              >
+                <Icon name="close" className="h-4 w-4" />
+              </button>
+            )}
+          </div>
           <button type="button" className="btn-primary sm:w-32" onClick={submit}>
             Search
           </button>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+
+        {/* Mode selector with explanations */}
+        <div className="mt-4" role="group" aria-label="Retrieval mode">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Mode</span>
+          <div className="mt-1.5 flex flex-wrap gap-2">
+            {RETRIEVAL_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={mode === m}
+                onClick={() => changeMode(m)}
+                className={`rounded-md border px-3 py-1.5 text-xs font-semibold capitalize transition-colors ${
+                  mode === m
+                    ? "border-brand-500 bg-brand-50 text-brand-700"
+                    : "border-gray-200 bg-surface text-gray-600 hover:border-gray-300"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-gray-500">{MODE_EXPLANATIONS[mode]}</p>
+        </div>
+
+        {/* Exact-match filters */}
+        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-3 lg:grid-cols-5">
           <input
             className={inputClass}
             placeholder="Entity (exact)"
@@ -277,12 +478,16 @@ export default function KnowledgePage() {
       </section>
 
       {/* Results */}
-      {isLoading && <StateBlock variant="loading" title="Searching…" />}
+      {isLoading && <StateBlock variant="loading" title="Searching the knowledge base…" />}
       {isError && (
         <StateBlock
           variant="error"
-          title="Search failed"
-          description={error ?? undefined}
+          title="Knowledge retrieval unavailable"
+          description={
+            error && !error.startsWith("Cannot reach")
+              ? error
+              : "The search index could not be queried — the database may be offline. The rest of the platform is unaffected."
+          }
           action={
             <button
               type="button"
@@ -297,26 +502,30 @@ export default function KnowledgePage() {
       {!isLoading && !isError && results === null && (
         <StateBlock
           variant="empty"
-          title="Search the knowledge base"
-          description="Enter a query (use quotes for exact phrases) or filter by entity, metric, period, method or validation status. Results always show their document, page and source reference."
+          title="Search your knowledge base"
+          description="Retrieve evidence from processed geological, mining and production documents. Every result links back to its source."
         />
       )}
       {!isLoading && !isError && results !== null && results.length === 0 && (
         <StateBlock
           variant="empty"
-          title="No results"
-          description="Nothing matched this query/filters. Note: documents appear in the index after processing."
+          title="No matching evidence found"
+          description="Try broader terms or another search mode. Documents appear in the index after processing."
         />
       )}
       {!isLoading && !isError && results !== null && results.length > 0 && (
         <>
-          <p className="mb-3 text-sm text-gray-500">
-            {total} result{total === 1 ? "" : "s"} · page {currentPage} of {totalPages}
+          <p className="mb-3 text-sm text-gray-500" aria-live="polite">
+            {total} result{total === 1 ? "" : "s"} · page {currentPage} of {totalPages} ·{" "}
+            <span className="text-gray-400">Results are linked to source evidence.</span>
           </p>
           {lastResponse?.semantic_error && (
-            <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Semantic retrieval unavailable — {lastResponse.semantic_error}
-              {lastResponse.mode === "hybrid" ? " Showing lexical results as fallback." : ""}
+            <div className="mb-3 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <Icon name="warn" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Semantic retrieval unavailable — {lastResponse.semantic_error}
+                {lastResponse.mode === "hybrid" ? " Showing lexical results as fallback." : ""}
+              </span>
             </div>
           )}
           {lastResponse?.retrieval_note && (
@@ -324,78 +533,10 @@ export default function KnowledgePage() {
           )}
           <div className="space-y-3">
             {results.map((item) => (
-              <article key={`${item.unit_type}-${item.validation_id ?? item.record_id ?? item.page_id ?? item.document_id}-${item.title ?? ""}`} className="card p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${unitBadge(item.unit_type)}`}>
-                    {item.unit_type}
-                  </span>
-                  {item.validation_status && (
-                    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${validationBadge(item.validation_status)}`}>
-                      {item.validation_status.replace("_", " ")}
-                    </span>
-                  )}
-                  {typeof item.ocr_confidence === "number" && (
-                    <span className="text-[10px] text-gray-400">
-                      OCR confidence {(item.ocr_confidence * 100).toFixed(0)}%
-                    </span>
-                  )}
-                  {item.extraction_method && (
-                    <span className="text-[10px] text-gray-400">via {item.extraction_method.replace("_", " ")}</span>
-                  )}
-                  {(typeof item.rank_score === "number" ||
-                    typeof item.semantic_similarity === "number" ||
-                    typeof item.relevance === "number") && (
-                    <span className="ml-auto flex gap-3 text-[10px] text-gray-300">
-                      {typeof item.rank_score === "number" && (
-                        <span title="Deterministic lexical relevance score — retrieval metric, not a trust score">
-                          lexical {item.rank_score}
-                        </span>
-                      )}
-                      {typeof item.semantic_similarity === "number" && (
-                        <span title="Cosine similarity — retrieval metric, never truth, correctness or trust">
-                          semantic {item.semantic_similarity.toFixed(3)}
-                        </span>
-                      )}
-                      {typeof item.relevance === "number" && (
-                        <span title="Combined hybrid relevance (explicit weighted formula) — retrieval metric, not a trust score">
-                          relevance {item.relevance.toFixed(3)}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                </div>
-
-                <p className="mt-1.5 text-sm font-semibold text-gray-900">
-                  {item.document_name ?? `Document #${item.document_id}`}
-                  {item.page_number ? ` · page ${item.page_number}` : ""}
-                </p>
-                {item.title && <p className="text-xs text-gray-500">{item.title}</p>}
-                {item.snippet && (
-                  <p className="mt-1.5 whitespace-pre-wrap break-words text-sm text-gray-700">{item.snippet}</p>
-                )}
-
-                {(item.entity || item.metric || item.value_raw) && (
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                    {item.entity && <span>entity: <span className="font-medium text-gray-800">{item.entity}</span></span>}
-                    {item.metric && <span>metric: <span className="font-mono">{item.metric}</span></span>}
-                    {item.value_raw && (
-                      <span>
-                        value: <span className="font-mono text-gray-800">{item.value_raw}</span>
-                        {item.normalized_value && item.normalized_value !== item.value_raw && (
-                          <span className="text-gray-400"> → {item.normalized_value}</span>
-                        )}
-                      </span>
-                    )}
-                    {item.unit && <span>unit: {item.unit}</span>}
-                    {item.reporting_period && <span>period: {item.reporting_period}</span>}
-                  </div>
-                )}
-
-                <p className="mt-2 text-[11px] text-gray-400">
-                  Source: {item.source_reference ?? "—"}
-                  {item.document_id ? ` · document #${item.document_id}` : ""}
-                </p>
-              </article>
+              <ResultCard
+                key={`${item.unit_type}-${item.validation_id ?? item.record_id ?? item.page_id ?? item.document_id}-${item.title ?? ""}`}
+                item={item}
+              />
             ))}
           </div>
 

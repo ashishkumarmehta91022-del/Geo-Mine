@@ -87,3 +87,13 @@ export interface DashboardSummary {
   recent_activity: RecentActivityItem[];
   limitations: string[];
 }
+
+/** GET /api/dashboard/statuses payload (status-only). */
+export interface DashboardStatuses {
+  data_available: boolean;
+  api: DashboardStatus;
+  database: DashboardStatus;
+  retrieval: DashboardStatus;
+  embeddings: DashboardStatus;
+  llm: DashboardStatus;
+}

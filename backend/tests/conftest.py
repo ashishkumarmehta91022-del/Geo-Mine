@@ -18,6 +18,43 @@ from sqlalchemy import create_engine, inspect, text
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_DIR.parent
 
+# --- LLM hermeticity (Step 6B-3) -------------------------------------------
+# The developer's local .env may legitimately configure a real LLM provider
+# (e.g. local Ollama via LLM_PROVIDER/LLM_MODEL/LLM_BASE_URL). Tests inject
+# their own providers via set_llm_provider() and must never depend on — or
+# spend real inference time contacting — a developer-configured provider.
+# pydantic-settings gives environment variables precedence over .env, so
+# emptying these for the TEST PROCESS ONLY restores the unconfigured default
+# the suite was written against. The running dev server is unaffected.
+for _llm_var in ("LLM_PROVIDER", "LLM_API_KEY", "LLM_MODEL", "LLM_BASE_URL"):
+    os.environ[_llm_var] = ""
+# Float-typed setting: an empty string would fail pydantic float parsing, and
+# the local .env never defines it, so simply remove it (default 60.0 applies).
+os.environ.pop("LLM_TIMEOUT_SECONDS", None)
+del _llm_var
+
+
+def run_alembic(*args: str) -> None:
+    """Run the alembic CLI in a subprocess (`python -P` keeps cwd off sys.path,
+    so the local backend/alembic migrations package cannot shadow the
+    installed alembic library). Inherits the environment, so callers may set
+    ALEMBIC_DATABASE_URL before calling."""
+    import subprocess
+    import sys
+
+    script = (
+        "import sys; sys.path.append(r'%s'); "
+        "from alembic.config import main; "
+        "main(argv=['-c','alembic.ini'] + %r)"
+    ) % (str(BACKEND_DIR), list(args))
+    result = subprocess.run(
+        [sys.executable, "-P", "-c", script],
+        cwd=str(BACKEND_DIR),
+        env=os.environ.copy(),
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"alembic {' '.join(args)} failed with exit {result.returncode}")
+
 
 def _test_database_url() -> str | None:
     return os.environ.get("CMPDI_TEST_DATABASE_URL")
@@ -43,9 +80,6 @@ def pg_url() -> str:
 @pytest.fixture(scope="session")
 def migrated_engine(pg_url: str):
     """Clean the test database, run Alembic migrations, yield a live engine."""
-    from alembic import command
-    from alembic.config import Config
-
     from app.models import Base
 
     os.environ["ALEMBIC_DATABASE_URL"] = pg_url
@@ -60,13 +94,12 @@ def migrated_engine(pg_url: str):
             conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
             conn.commit()
 
-    alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-    alembic_cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-    command.upgrade(alembic_cfg, "head")
+    run_alembic("upgrade", "head")
 
     yield app_engine
 
     app_engine.dispose()
+    os.environ.pop("ALEMBIC_DATABASE_URL", None)
 
 
 @pytest.fixture()

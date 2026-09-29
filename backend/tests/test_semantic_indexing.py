@@ -303,7 +303,7 @@ def test_semantic_mode_without_provider_is_503(client, migrated_engine):
     try:
         response = client.get("/api/search", params={"q": "coal", "mode": "semantic"})
         assert response.status_code == 503
-        assert response.json()["code"] == "semantic_unavailable"
+        assert response.json()["error"]["code"] == "semantic_unavailable"
     finally:
         set_embedding_provider(FakeVectorProvider())
 
@@ -311,13 +311,13 @@ def test_semantic_mode_without_provider_is_503(client, migrated_engine):
 def test_semantic_mode_requires_query_text(client, migrated_engine):
     response = client.get("/api/search", params={"mode": "semantic"})
     assert response.status_code == 422
-    assert response.json()["code"] == "empty_semantic_query"
+    assert response.json()["error"]["code"] == "empty_semantic_query"
 
 
 def test_unsupported_mode_is_422(client):
     response = client.get("/api/search", params={"q": "coal", "mode": "vector-magic"})
     assert response.status_code == 422
-    assert response.json()["code"] == "unsupported_mode"
+    assert response.json()["error"]["code"] == "unsupported_mode"
 
 
 # --- hybrid retrieval --------------------------------------------------------------------

@@ -27,11 +27,20 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 logger = logging.getLogger(__name__)
 
 
-def _statuses_only(db_connected: bool, detail: str | None) -> dict:
+def _statuses_only(db_connected: bool, detail: str | None, db: Session | None = None) -> dict:
     from app.dashboard.service import compute_statuses
+    from app.exceptions import AppError, DatabaseUnavailableError
+    from app.services import knowledge_service
+
+    index_stats = None
+    if db_connected and db is not None:
+        try:
+            index_stats = knowledge_service.index_statistics(db)  # bounded counts
+        except (AppError, DatabaseUnavailableError, SQLAlchemyError):
+            index_stats = None  # fall back to honest DEGRADED, never fake health
 
     statuses = compute_statuses(
-        db_connected=db_connected, db_detail=detail, index_stats=None,
+        db_connected=db_connected, db_detail=detail, index_stats=index_stats,
         llm_configured=llm_available(default_config()),
     )
     return {
@@ -99,5 +108,5 @@ def _offline_payload() -> dict:
 def dashboard_statuses_route(db: Session = Depends(get_db)) -> DashboardStatuses:
     """Lightweight status-only summary (bounded probe + availability checks)."""
     connected, detail = probe_database()
-    payload = _statuses_only(connected, detail)
+    payload = _statuses_only(connected, detail, db=db)
     return DashboardStatuses(**payload)

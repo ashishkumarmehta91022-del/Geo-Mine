@@ -7,6 +7,7 @@ the FastAPI TestClient, with an isolated temp storage directory per run.
 import io
 
 import pytest
+from sqlalchemy import text
 
 pytestmark = pytest.mark.db
 
@@ -116,14 +117,16 @@ def test_database_failure_cleans_up_stored_file(client, monkeypatch, tmp_path):
 
     class BrokenSession(Session):
         def commit(self):
-            raise AppError(status_code=500, code="boom", message="db down")
+            raise SQLAlchemyError("db down")
+
+    from sqlalchemy.exc import SQLAlchemyError
 
     import app.services.document_service as service_module
     original = service_module.Session
 
     def broken_session_factory(*args, **kwargs):
         session = Session()
-        session.commit = lambda: (_ for _ in ()).throw(AppError(status_code=500, code="boom", message="db down"))
+        session.commit = lambda: (_ for _ in ()).throw(SQLAlchemyError("db down"))
         return session
 
     # Patch the route-level dependency to hand out a session whose commit fails.
@@ -151,7 +154,7 @@ def test_document_list_pagination(client):
     assert page1["total"] == 7 and len(page1["items"]) == 3
     assert page3["total"] == 7 and len(page3["items"]) == 1
     ids = {d["id"] for d in page1["items"]} | {d["id"] for d in page3["items"]}
-    assert len(ids) == 7
+    assert len(ids) == 4  # 3 newest + 1 oldest, no overlap between pages
     # Newest first.
     assert page1["items"][0]["id"] > page1["items"][-1]["id"]
 

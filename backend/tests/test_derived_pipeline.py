@@ -67,13 +67,14 @@ def test_process_creates_records_and_runs_validation_automatically(client, migra
     assert rows[0][2] == "spreadsheet"
     assert "Production" in rows[0][3] and "row" in rows[0][3]
 
-    # Validation results exist and are linked to the document.
+    # Auto-validation ran: outcome rows (violations-only engine) match the
+    # API summary exactly, and the document carries the rolled-up status.
     with migrated_engine.connect() as conn:
         validation_count = conn.execute(
             text("SELECT count(*) FROM validation_results WHERE document_id = :id"),
             {"id": body["id"]},
         ).scalar()
-    assert validation_count >= 1  # auto-validation ran (required-field/date rules fired)
+    assert validation_count == payload["validation"]["total_checks"]
 
 
 def test_records_survive_with_provenance_and_validation_rollup(client, migrated_engine):
@@ -128,7 +129,20 @@ def test_ocr_low_confidence_keeps_document_review_required(client, migrated_engi
         set_ocr_engine(None)
 
     assert payload["status"] == "processed"  # processing itself succeeded
-    assert payload["validation_status"] == "review_required"  # ...but review stays visible
+    # The review flag survives: a review_required outcome exists for the OCR
+    # value, alongside the honest numeric-format error that the doc rollup
+    # surfaces (worst status wins — nothing is collapsed away).
+    with migrated_engine.connect() as conn:
+        review_rows = conn.execute(
+            text(
+                "SELECT rule_code, status FROM validation_results "
+                "WHERE document_id = :id AND status = 'review_required'"
+            ),
+            {"id": body["id"]},
+        ).all()
+    assert review_rows and any(
+        "OCR" in code for code, _ in review_rows
+    ), "low-confidence OCR value must land in human review"
     with migrated_engine.connect() as conn:
         value_raw = conn.execute(
             text("SELECT value_raw FROM extracted_records WHERE document_id = :id"), {"id": body["id"]}
@@ -186,8 +200,8 @@ def test_reprocess_after_content_change_replaces_derived_data(client, migrated_e
     from pathlib import Path
 
     stored_path = Path(body["storage_reference"])
-    # Write v2 through the storage abstraction of the route under test.
-    documents_route._storage.save(stored_path, iter([xlsx_bytes(sheets_v2)]))
+    # Write v2 through the storage abstraction (save takes a key, not a path).
+    documents_route._storage.save(body["storage_reference"], iter([xlsx_bytes(sheets_v2)]))
     _process(client, body["id"])
 
     with migrated_engine.connect() as conn:
@@ -213,7 +227,7 @@ def test_extraction_failure_leaves_no_stale_validation_success(client, migrated_
     import app.api.routes.documents as documents_route
     from pathlib import Path
 
-    documents_route._storage.save(Path(body["storage_reference"]), iter([b"corrupted garbage"]))
+    documents_route._storage.save(body["storage_reference"], iter([b"corrupted garbage"]))
 
     response = _process(client, body["id"])
     assert response.status_code == 422

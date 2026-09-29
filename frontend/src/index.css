@@ -2,10 +2,203 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Shared design-system classes used across the shell UI. */
+/* ---------------------------------------------------------------------------
+   Design system — SIH26023 CMPDI AI Reporting Platform
+   Semantic palettes are CSS variables (RGB channel triplets) so the entire
+   app switches themes in one place. Light on :root, dark on `html.dark`.
+   Status semantics never change: green=ok, amber=warn, red=error, gray=n/a.
+--------------------------------------------------------------------------- */
+
+:root {
+  /* Theme-aware surface: card/top-bar background. */
+  --c-surface: 255 255 255;
+
+  /* brand — restrained blue accent (light) */
+  --c-brand-50: 238 244 251;
+  --c-brand-100: 217 230 246;
+  --c-brand-200: 179 205 234;
+  --c-brand-300: 132 173 218;
+  --c-brand-400: 85 141 201;
+  --c-brand-500: 47 109 180;
+  --c-brand-600: 34 87 149;
+  --c-brand-700: 26 68 118;
+  --c-brand-800: 18 50 87;
+  --c-brand-900: 11 33 58;
+
+  /* gray — neutral surfaces/text (light) */
+  --c-gray-50: 249 250 251;
+  --c-gray-100: 243 244 246;
+  --c-gray-200: 229 231 235;
+  --c-gray-300: 209 213 219;
+  --c-gray-400: 156 163 175;
+  --c-gray-500: 107 114 128;
+  --c-gray-600: 75 85 99;
+  --c-gray-700: 55 65 81;
+  --c-gray-800: 31 41 55;
+  --c-gray-900: 17 24 39;
+
+  /* slate — app canvas (light) */
+  --c-slate-50: 248 250 252;
+  --c-slate-100: 241 245 249;
+  --c-slate-200: 226 232 240;
+  --c-slate-300: 203 213 225;
+  --c-slate-400: 148 163 184;
+  --c-slate-500: 100 116 139;
+  --c-slate-600: 71 85 105;
+  --c-slate-700: 51 65 85;
+  --c-slate-800: 30 41 59;
+  --c-slate-900: 15 23 42;
+
+  /* emerald — operational/pass */
+  --c-emerald-50: 236 253 245;
+  --c-emerald-200: 167 243 208;
+  --c-emerald-300: 110 231 183;
+  --c-emerald-500: 16 185 129;
+  --c-emerald-600: 5 150 105;
+  --c-emerald-700: 4 120 87;
+  --c-emerald-800: 6 95 70;
+  --c-emerald-900: 6 78 59;
+
+  /* amber — warning/review */
+  --c-amber-50: 255 251 235;
+  --c-amber-200: 253 230 138;
+  --c-amber-300: 252 211 77;
+  --c-amber-500: 245 158 11;
+  --c-amber-600: 217 119 6;
+  --c-amber-700: 180 83 9;
+  --c-amber-800: 146 64 14;
+  --c-amber-900: 120 53 15;
+
+  /* red — error/conflict */
+  --c-red-50: 254 242 242;
+  --c-red-200: 254 202 202;
+  --c-red-300: 252 165 165;
+  --c-red-500: 239 68 68;
+  --c-red-600: 220 38 38;
+  --c-red-700: 185 28 28;
+  --c-red-800: 153 27 27;
+  --c-red-900: 127 29 29;
+
+  /* violet — human-review workflow */
+  --c-violet-50: 245 243 255;
+  --c-violet-200: 221 214 254;
+  --c-violet-300: 196 181 253;
+  --c-violet-500: 139 92 246;
+  --c-violet-600: 124 58 237;
+  --c-violet-700: 109 40 217;
+  --c-violet-800: 91 33 182;
+  --c-violet-900: 76 29 149;
+}
+
+/* ---------------------------------------------------------------------------
+   DARK MODE — intentionally designed: deep slate-navy canvas, elevated
+   panels, desaturated tints for readability. Role-mapped (e.g. dark
+   gray-800/900 hold the LIGHT colors that gray-50/100/200 hold in light
+   mode) so existing class combinations read correctly.
+--------------------------------------------------------------------------- */
+html.dark {
+  /* Theme-aware surface: elevated panel over the dark canvas. */
+  --c-surface: 22 33 54;
+
+  /* brand — brighter, restrained blue for dark surfaces. 50–300 are tint
+     backgrounds; 400–500 are accent fills/icons; 600–900 darken for solid
+     buttons (white text) and remain readable as light text on tint bg. */
+  --c-brand-50: 15 30 48;
+  --c-brand-100: 20 40 62;
+  --c-brand-200: 24 52 80;
+  --c-brand-300: 32 66 100;
+  --c-brand-400: 62 118 178;
+  --c-brand-500: 96 150 210;
+  --c-brand-600: 64 118 184;
+  --c-brand-700: 52 100 160;
+  --c-brand-800: 42 84 138;
+  --c-brand-900: 34 70 118;
+
+  /* gray — inverted role map: low = surfaces, high = text */
+  --c-gray-50: 15 23 42;
+  --c-gray-100: 22 32 51;
+  --c-gray-200: 30 41 59;
+  --c-gray-300: 44 56 78;
+  --c-gray-400: 110 124 148;
+  --c-gray-500: 150 162 184;
+  --c-gray-600: 188 198 214;
+  --c-gray-700: 214 222 234;
+  --c-gray-800: 234 239 247;
+  --c-gray-900: 244 247 251;
+
+  /* slate — canvas + elevated cards */
+  --c-slate-50: 11 18 32;
+  --c-slate-100: 17 26 44;
+  --c-slate-200: 26 38 60;
+  --c-slate-300: 40 54 80;
+  --c-slate-400: 100 114 140;
+  --c-slate-500: 140 154 180;
+  --c-slate-600: 180 192 212;
+  --c-slate-700: 210 220 236;
+  --c-slate-800: 232 238 248;
+  --c-slate-900: 244 247 252;
+
+  /* emerald — softer bg, brighter text */
+  --c-emerald-50: 8 39 33;
+  --c-emerald-200: 22 74 60;
+  --c-emerald-300: 16 92 72;
+  --c-emerald-500: 52 199 145;
+  --c-emerald-600: 78 208 160;
+  --c-emerald-700: 122 220 180;
+  --c-emerald-800: 160 230 198;
+  --c-emerald-900: 190 238 214;
+
+  /* amber */
+  --c-amber-50: 51 38 8;
+  --c-amber-200: 82 62 14;
+  --c-amber-300: 100 78 22;
+  --c-amber-500: 251 191 36;
+  --c-amber-600: 251 204 82;
+  --c-amber-700: 253 218 128;
+  --c-amber-800: 254 230 170;
+  --c-amber-900: 255 240 205;
+
+  /* red */
+  --c-red-50: 55 17 17;
+  --c-red-200: 91 29 29;
+  --c-red-300: 110 40 40;
+  --c-red-500: 248 113 113;
+  --c-red-600: 252 141 141;
+  --c-red-700: 253 166 166;
+  --c-red-800: 254 190 190;
+  --c-red-900: 255 210 210;
+
+  /* violet */
+  --c-violet-50: 40 28 74;
+  --c-violet-200: 60 44 105;
+  --c-violet-300: 76 58 128;
+  --c-violet-500: 167 139 250;
+  --c-violet-600: 184 160 252;
+  --c-violet-700: 199 180 253;
+  --c-violet-800: 214 200 254;
+  --c-violet-900: 228 218 255;
+}
+
+@layer base {
+  body {
+    @apply bg-slate-100 text-gray-800 antialiased;
+    color-scheme: light;
+  }
+
+  html.dark body {
+    @apply bg-slate-100 text-gray-800;
+    color-scheme: dark;
+  }
+
+  /* Visible keyboard focus everywhere (accessibility requirement). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-1 ring-offset-slate-100;
+  }
+}
+
 @layer components {
   .card {
-    @apply rounded-lg border border-gray-200 bg-white shadow-sm;
+    @apply rounded-md border border-gray-200 bg-surface shadow-sm;
   }
 
   .btn {
@@ -15,10 +208,52 @@
   }
 
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700;
+    @apply btn bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800;
   }
 
   .btn-secondary {
-    @apply btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
+    @apply btn border border-gray-300 bg-surface text-gray-700 hover:bg-gray-50 active:bg-gray-100;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-600 hover:bg-gray-100 hover:text-gray-900;
+  }
+
+  .btn-danger {
+    @apply btn border border-red-200 bg-surface text-red-700 hover:bg-red-50;
+  }
+
+  /* Sidebar navigation items (active/hover/focus handled in Sidebar.tsx). */
+  .nav-item {
+    @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300;
+  }
+
+  .table-base thead th {
+    @apply border-b border-gray-200 bg-gray-50 px-3 py-2.5 text-left text-[11px] font-semibold
+      uppercase tracking-wide text-gray-500;
+  }
+
+  .table-base tbody td {
+    @apply border-b border-gray-100 px-3 py-2.5 align-middle;
+  }
+
+  .table-base tbody tr {
+    @apply transition-colors hover:bg-slate-50;
+  }
+
+  .input-base {
+    @apply w-full rounded-md border border-gray-300 bg-surface px-3 py-2 text-sm text-gray-800
+      placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1
+      focus:ring-brand-500;
+  }
+
+  .demo-banner {
+    @apply flex items-center justify-center gap-2 bg-navy-900 px-3 py-1.5 text-[11px]
+      font-semibold uppercase tracking-widest text-amber-300;
+  }
+
+  .section-title {
+    @apply text-xs font-bold uppercase tracking-wider text-gray-500;
   }
 }

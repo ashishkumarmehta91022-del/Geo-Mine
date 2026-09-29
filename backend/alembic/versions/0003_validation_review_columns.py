@@ -50,13 +50,29 @@ def upgrade() -> None:
     )
     op.alter_column("validation_results", "document_id", existing_type=sa.Integer(), nullable=False)
 
-    # --- rename validation_type -> rule_code (clearer; same data) ---
+    # --- renames (clearer; same data) -------------------------------------
+    # validation_type -> rule_code
     op.alter_column(
         "validation_results",
         "validation_type",
         new_column_name="rule_code",
         existing_type=sa.String(length=64),
         existing_nullable=False,
+    )
+    # actual_value -> original_value (Step 6 model contract: the verbatim
+    # extracted value; normalized value lives on extracted_records)
+    op.alter_column(
+        "validation_results",
+        "actual_value",
+        new_column_name="original_value",
+        existing_type=sa.String(length=256),
+        existing_nullable=True,
+    )
+
+    # --- provenance reference (Step 6: where the checked value came from) ---
+    op.add_column(
+        "validation_results",
+        sa.Column("source_reference", sa.String(length=512), nullable=True),
     )
 
     # --- OCR/page-level results may exist without an extracted record ---
@@ -105,6 +121,14 @@ def downgrade() -> None:
         existing_type=sa.String(length=64),
         existing_nullable=False,
     )
+    op.alter_column(
+        "validation_results",
+        "original_value",
+        new_column_name="actual_value",
+        existing_type=sa.String(length=256),
+        existing_nullable=True,
+    )
+    op.drop_column("validation_results", "source_reference")
     op.drop_column("validation_results", "details")
     op.drop_column("validation_results", "reviewed_at")
     op.drop_column("validation_results", "review_notes")

@@ -37,7 +37,7 @@ def _make_document(migrated_engine, filename: str, pages_text: list[str]) -> int
             ))
         session.commit()
         document_id = document.id
-    knowledge_service.index_document(migrated_engine, document_id)
+    knowledge_service.index_document(Session(migrated_engine), document_id)
     return document_id
 
 
@@ -146,6 +146,7 @@ def test_document_without_indexed_content_is_404(client, migrated_engine):
 
 def test_intelligence_audit_rows_written(client, migrated_engine):
     from sqlalchemy import select
+    from sqlalchemy.orm import Session
 
     from app.models import AuditLog
 

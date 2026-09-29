@@ -176,24 +176,19 @@ def build_deterministic_summary(
         )
     counts = _document_counts(db, document_id)
     keyword_data = extract_keywords(corpus)
-    doc_terms = sorted(
-        (
-            (term, freq)
-            for term, freq in keyword_data["term_frequency"].items()
-            if any(corpus.units[u].document_id == document_id for u in _term_units(corpus, term))
-        ),
-        key=lambda item: (-item[1], item[0]),
-    )[:MAX_SUMMARY_TERMS]
+    # Terms that actually occur in THIS document's indexed units.
+    document_term_set = {
+        term
+        for term, freq in keyword_data["term_frequency"].items()
+        if any(corpus.units[u].document_id == document_id for u in _term_units(corpus, term))
+    }
+    # Reuse the ranked Keyword objects (provenance-carrying dataclasses —
+    # to_payload() renders them); keep deterministic rank order.
     key_terms = [
-        {
-            "term": term,
-            "display_term": display_form(corpus, term).title()
-            if display_form(corpus, term).islower()
-            else display_form(corpus, term),
-            "frequency": freq,
-        }
-        for term, freq in doc_terms
-    ]
+        keyword
+        for keyword in keyword_data["keywords"]
+        if keyword.term in document_term_set
+    ][:MAX_SUMMARY_TERMS]
     top_topics = [topic for topic in topics
                   if document_id in topic.document_ids][:MAX_SUMMARY_TOPICS]
 
@@ -216,7 +211,7 @@ def build_deterministic_summary(
     if key_terms:
         parts.append(
             "Most frequent terms: "
-            + ", ".join(f"{item['display_term']} ({item['frequency']})" for item in key_terms[:5])
+            + ", ".join(f"{item.display_term} ({item.frequency})" for item in key_terms[:5])
             + "."
         )
     if top_topics:
@@ -246,7 +241,7 @@ def build_deterministic_summary(
         pending_validation_count=counts["pending_validation_count"],
         conflict_count=0,
         summary_text=" ".join(parts),
-        key_terms=[],
+        key_terms=key_terms,
         top_topics=top_topics,
         key_metrics=_key_metrics(db, document_id),
         corpus_truncated=bool(

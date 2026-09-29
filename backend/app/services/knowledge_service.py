@@ -77,6 +77,7 @@ def _write_units(db: Session, document: Document, drafts) -> int:
                 source_reference=draft.source_reference,
                 entity=draft.entity,
                 metric=draft.metric,
+                unit=draft.unit,
                 reporting_period=draft.reporting_period,
                 extraction_method=draft.extraction_method,
                 validation_status=draft.validation_status,
@@ -275,6 +276,8 @@ def embed_document(db: Session, document_id: int) -> dict[str, Any]:
         "elapsed_seconds": None,
     }
     try:
+        if db.get(Document, document_id) is None:
+            raise AppError(status_code=404, code="document_not_found", message="Document not found.")
         rows = db.execute(
             select(KnowledgeIndex)
             .where(KnowledgeIndex.document_id == document_id)
@@ -417,7 +420,12 @@ def search_semantic(db: Session, query: SearchQuery, query_vector: list[float]) 
         "query": query.text,
         "total": len(pairs),
         "results": [row for row, _score in window],
-        "scores": {row.id: score for row, score in window},
+        # Same merge-entry shape as search_hybrid so the route layer and the
+        # hybrid merge read one uniform contract (row + component scores).
+        "scores": {
+            row.id: {"row": row, "lexical": None, "semantic": score, "combined": None}
+            for row, score in window
+        },
         "semantic_available": True,
     }
 
@@ -461,11 +469,13 @@ def search_hybrid(db: Session, query: SearchQuery, query_vector: list[float]) ->
             "semantic": None,
             "combined": HYBRID_LEXICAL_WEIGHT * normalized_lexical,
         }
-    for row, similarity in semantic.get("scores", {}).items():
+    for entry in semantic.get("scores", {}).values():
+        row = entry["row"]
+        similarity = entry["semantic"]
         if row.id in combined:
-            entry = combined[row.id]
-            entry["semantic"] = similarity
-            entry["combined"] += HYBRID_SEMANTIC_WEIGHT * ((1.0 + similarity) / 2.0)
+            merged = combined[row.id]
+            merged["semantic"] = similarity
+            merged["combined"] += HYBRID_SEMANTIC_WEIGHT * ((1.0 + similarity) / 2.0)
         else:
             combined[row.id] = {
                 "row": row,
@@ -505,7 +515,7 @@ def index_statistics(db: Session) -> dict[str, Any]:
             select(KnowledgeIndex.unit_type, func.count())
             .group_by(KnowledgeIndex.unit_type)
         ).all()
-        documents = db.execute(select(func.count()).select_from(KnowledgeIndex.document_id.distinct())).scalar_one()
+        documents = db.execute(func.count(func.distinct(KnowledgeIndex.document_id))).scalar_one()
         last_update = db.execute(select(func.max(KnowledgeIndex.updated_at))).scalar_one()
         embedded = db.execute(
             select(func.count()).select_from(KnowledgeIndex).where(
@@ -517,6 +527,7 @@ def index_statistics(db: Session) -> dict[str, Any]:
                 KnowledgeIndex.embedding_status.in_([EmbeddingStatus.FAILED, EmbeddingStatus.UNAVAILABLE])
             )
         ).scalar_one()
+        # (counts use select_from(KnowledgeIndex) — same pattern as every other service)
         embedding_models = db.execute(
             select(KnowledgeIndex.embedding_model).distinct().where(
                 KnowledgeIndex.embedding_model.is_not(None)
@@ -531,6 +542,7 @@ def index_statistics(db: Session) -> dict[str, Any]:
 
     counts = {unit_type: int(count) for unit_type, count in by_type}
     return {
+        "documents_indexed": int(documents),
         "embedded_units": int(embedded),
         "embedding_error_units": int(embedding_errors),
         "embedding_models": sorted(model or "unknown" for model in embedding_models),

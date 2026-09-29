@@ -28,24 +28,40 @@ def test_alembic_upgrade_creates_all_foundation_tables(migrated_engine):
     } <= tables
     with migrated_engine.connect() as conn:
         version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "0001_initial_schema"
+    # The stamped version must equal the chain head — computed from the
+    # version files themselves (import-free: the local backend/alembic
+    # migrations package intentionally shadows the alembic library here).
+    import re
+
+    versions_dir = BACKEND_DIR / "alembic" / "versions"
+    revisions: set[str] = set()
+    downs: set[str] = set()
+    for path in versions_dir.glob("0*.py"):
+        migration_src = path.read_text(encoding="utf-8")
+        rev_match = re.search(r'^revision\s*=\s*"([^"]+)"', migration_src, re.M)
+        down_match = re.search(r'^down_revision\s*=\s*"([^"]+)"', migration_src, re.M)
+        if rev_match:
+            revisions.add(rev_match.group(1))
+            if down_match:
+                downs.add(down_match.group(1))
+    head = revisions - downs
+    assert len(head) == 1, f"expected exactly one head, got {head}"
+    assert version == head.pop()
 
 
 def test_alembic_downgrade_and_upgrade_roundtrip(pg_url: str, migrated_engine):
     """downgrade to base then back to head — proves the migration is reproducible."""
-    from alembic import command
-    from alembic.config import Config
+    from tests.conftest import run_alembic
 
-    alembic_cfg = Config(str(BACKEND_DIR / "alembic.ini"))
-    alembic_cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
-
-    command.downgrade(alembic_cfg, "base")
+    os.environ["ALEMBIC_DATABASE_URL"] = pg_url
+    run_alembic("downgrade", "base")
     inspector = inspect(migrated_engine)
     assert not {"documents", "extracted_records"} & set(inspector.get_table_names())
 
-    command.upgrade(alembic_cfg, "head")
+    run_alembic("upgrade", "head")
     inspector = inspect(migrated_engine)
     assert "extracted_records" in inspector.get_table_names()
+    os.environ.pop("ALEMBIC_DATABASE_URL", None)
 
 
 def test_seed_script_is_idempotent_and_resettable(pg_url: str, migrated_engine):

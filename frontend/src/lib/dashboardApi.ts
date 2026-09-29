@@ -5,7 +5,7 @@
 
 import { apiBaseUrl } from "@/lib/env";
 import { ApiError } from "@/lib/api";
-import type { DashboardSummary } from "@/types/dashboard";
+import type { DashboardStatuses, DashboardSummary } from "@/types/dashboard";
 
 export async function fetchDashboardSummary(signal?: AbortSignal): Promise<DashboardSummary> {
   let response: Response;
@@ -28,4 +28,21 @@ export async function fetchDashboardSummary(signal?: AbortSignal): Promise<Dashb
     throw new ApiError(message, response.status);
   }
   return (await response.json()) as DashboardSummary;
+}
+
+/** Lightweight GET /api/dashboard/statuses (status-only polling payload). */
+export async function fetchDashboardStatuses(signal?: AbortSignal): Promise<DashboardStatuses> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}/api/dashboard/statuses`, {
+      signal,
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new ApiError("Cannot reach the API server. Is the backend running?");
+  }
+  if (!response.ok) {
+    throw new ApiError(`Status request failed with status ${response.status}.`, response.status);
+  }
+  return (await response.json()) as DashboardStatuses;
 }
