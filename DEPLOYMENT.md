@@ -149,6 +149,7 @@ so you can tell which half is misconfigured:
 | `Tried https://<vercel-app>.vercel.app/api (same origin — no VITE_API_BASE_URL set)` | Frontend has no API origin | Set `VITE_API_BASE_URL` in Vercel, **redeploy** |
 | `Tried https://<service>.up.railway.app/api` and the browser console shows a CORS error | Backend does not allow the frontend origin | Set `CORS_ORIGINS` in Railway (exact Vercel origin), redeploy backend |
 | `Tried https://<service>.up.railway.app/api` and curl to `/api/health` also fails | Backend itself is down/misrouted | Fix Railway root dir / start command (`$PORT`!) / DATABASE_URL per §1 |
+| AI Query returns `502 llm_error: LLM call failed: …` | LLM IS configured but the call fails (bad key, unknown model, quota) | Read the exact cause in the message — fix `LLM_API_KEY`/`LLM_MODEL` per §LLM. The tile only proves model+base_url are set, not that the key works |
 
 Note: dev (`npm run dev`) needs none of this — the Vite proxy handles `/api`
 via `VITE_API_PROXY_TARGET` (default `http://localhost:8000`), and

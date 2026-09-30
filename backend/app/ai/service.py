@@ -212,8 +212,14 @@ def _unavailable_result(
     latency_ms: int | None = None,
 ) -> dict[str, Any]:
     """LLM unavailable/failed/malformed — evidence still returned honestly."""
+    # Classification: a reason starting with "unavailable" means no usable
+    # provider exists (configuration problem); anything else ("failed: …",
+    # "malformed provider response: …") means a provider EXISTS but the call
+    # failed. Collapsing both into llm_unavailable used to hide the real
+    # cause (bad key, bad model, timeout) behind "not configured".
+    status = "llm_unavailable" if reason.startswith("unavailable") else "llm_error"
     result: dict[str, Any] = {
-        "status": "llm_unavailable" if provider is None else "llm_error",
+        "status": status,
         "question": question,
         "retrieval_mode": mode,
         "evidence": [item.to_payload() for item in evidence],

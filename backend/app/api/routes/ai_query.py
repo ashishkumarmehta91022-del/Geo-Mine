@@ -59,5 +59,14 @@ def ai_query_route(
             code="llm_unavailable",
             message="No LLM provider is configured; answers cannot be generated without one.",
         )
+    if result["status"] == "llm_error":
+        # A provider IS configured but the call failed — surface the real
+        # cause (bad key, unknown model, timeout) instead of masking it as
+        # "not configured".
+        raise AppError(
+            status_code=502,
+            code="llm_error",
+            message=f"LLM call failed: {result.get('error') or 'unknown error'}",
+        )
 
     return AIQueryResponse(**result)
