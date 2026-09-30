@@ -156,6 +156,42 @@ via `VITE_API_PROXY_TARGET` (default `http://localhost:8000`), and
 
 ---
 
+## 3b. Populating the deployed instance (EMBEDDINGS tile)
+
+A fresh Railway database is empty, so the dashboard honestly shows
+`EMBEDDINGS — NOT CONFIGURED (No units embedded yet)` and `RETRIEVAL —
+DEGRADED`. Two ways to fill it:
+
+**Option A — exercise the real pipeline (recommended):** upload a demo file
+on the deployed Documents page → Process. Extraction, validation, indexing
+run server-side; the embedding model (bge-small-en-v1.5, ~130 MB) downloads
+once on first use. Note the process call is synchronous — Railway's proxy
+may return `502 Application failed to respond` on the first document while
+the model downloads; the work completes anyway. Then make every unit
+searchable (pages + records + validations) with the idempotent embed
+endpoint per document:
+
+```bash
+curl -X POST https://<service>.up.railway.app/api/search/embed/<document_id>
+```
+
+Both steps are exactly what the UI pipeline does; after them
+`/api/dashboard/summary` reports `embeddings: OPERATIONAL` with 100%
+coverage (verified live on 2026-09-30).
+
+**Option B — seed the DEMO dataset directly:** copy the **public** database
+URL from Railway → Postgres service → Connect tab (keep credentials out of
+chat/screenshots), then from the repo root:
+
+```bash
+DATABASE_URL="postgresql://<user>:<pass>@<host>:<port>/<db>" \
+  .venv/Scripts/python.exe scripts/seed_demo_data.py
+```
+
+The script inserts one `DEMO_`-labelled document (2 pages, 3 records,
+1 validation, 1 audit row) and indexes it. `--reset` deletes only previous
+DEMO rows. It does **not** configure an LLM — see §LLM.
+
 ## 4. Post-deploy checklist
 
 1. `curl https://<service>.up.railway.app/api/health` → 200.
